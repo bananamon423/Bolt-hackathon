@@ -1,13 +1,12 @@
 /*
-# AI Chat Edge Function - Fixed Gemini API Integration
+# AI Chat Edge Function - Fixed Message Handling
 
-This file contains the corrected Supabase Edge Function code with the proper Gemini API model identifier.
+This file contains the corrected Supabase Edge Function that properly handles both user and AI messages.
 
 ## Key Changes
-1. **Correct Model Identifier:** Using 'gemini-1.5-flash' which is available and supported
-2. **Proper API Endpoint:** Using the correct v1beta API endpoint
-3. **Fallback Model:** Set a reliable fallback model identifier
-4. **Fixed Message Insertion:** Ensure AI messages are properly inserted with all required fields
+1. **Separate Message Insertion:** User message and AI response are inserted separately
+2. **Proper Message Flow:** Ensures both messages appear in the chat
+3. **Error Handling:** Better error handling for message insertion
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -165,23 +164,8 @@ Deno.serve(async (req: Request) => {
     const geminiData = await geminiResponse.json();
     const aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, but I couldn't generate a response.";
 
-    // First, insert the user's message
-    const { error: userMessageError } = await supabase
-      .from("messages")
-      .insert({
-        chat_id: chatId,
-        sender_id: user.id,
-        sender_type: "user",
-        content: message,
-        model_id: null,
-        token_cost: null,
-      });
-
-    if (userMessageError) {
-      console.error("Could not save user message:", userMessageError);
-    }
-
-    // Then save AI message to your database
+    // Save ONLY the AI message to the database
+    // The user message should already be saved by the frontend
     const { error: messageError } = await supabase
       .from("messages")
       .insert({

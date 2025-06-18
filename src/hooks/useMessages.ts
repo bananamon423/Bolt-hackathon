@@ -44,9 +44,18 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
           if (!error && fullMessage) {
             setMessages((currentMessages) => {
-              // Remove any existing message with the same ID (in case of duplicates)
-              const filteredMessages = currentMessages.filter(m => m.id !== fullMessage.id);
-              return [...filteredMessages, fullMessage];
+              // Check if message already exists (avoid duplicates)
+              const existingIndex = currentMessages.findIndex(m => m.id === fullMessage.id);
+              if (existingIndex >= 0) {
+                // Replace existing message with complete data
+                const updatedMessages = [...currentMessages];
+                updatedMessages[existingIndex] = fullMessage;
+                return updatedMessages;
+              } else {
+                // Add new message in correct chronological order
+                const newMessages = [...currentMessages, fullMessage];
+                return newMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+              }
             });
           }
         }
@@ -87,9 +96,10 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const sendMessage = async (content: string, userId: string) => {
     if (!chatId || !content.trim() || !currentUser) return null;
 
-    // --- Start of Optimistic Update ---
+    // Create optimistic message with a unique temporary ID
+    const tempId = `temp_${Date.now()}_${Math.random()}`;
     const optimisticMessage: Message = {
-      id: Date.now(), // Use timestamp as temporary ID
+      id: tempId as any, // Temporary ID for optimistic update
       chat_id: chatId,
       sender_id: userId,
       sender_type: 'user',
@@ -98,28 +108,55 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       profiles: currentUser,
     };
 
+    // Add optimistic message immediately
     setMessages(currentMessages => [...currentMessages, optimisticMessage]);
-    // --- End of Optimistic Update ---
 
     try {
-      const { error } = await supabase
+      const { data: insertedMessage, error } = await supabase
         .from('messages')
         .insert({
           chat_id: chatId,
           sender_id: userId,
           sender_type: 'user',
           content: content.trim(),
-        });
+        })
+        .select(`
+          *,
+          profiles (
+            id,
+            username,
+            profile_picture_url
+          )
+        `)
+        .single();
 
       if (error) {
         console.error('Error sending message:', error);
-        setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
+        // Remove optimistic message on error
+        setMessages(currentMessages => 
+          currentMessages.filter(m => m.id !== tempId)
+        );
+        throw error;
       }
+
+      // Replace optimistic message with real message
+      if (insertedMessage) {
+        setMessages(currentMessages => 
+          currentMessages.map(m => 
+            m.id === tempId ? insertedMessage : m
+          )
+        );
+      }
+
+      return insertedMessage;
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
+      // Remove optimistic message on error
+      setMessages(currentMessages => 
+        currentMessages.filter(m => m.id !== tempId)
+      );
+      throw error;
     }
-    return null;
   };
 
   const sendAIMessage = async (content: string, modelId: string) => {

@@ -30,17 +30,20 @@ export function MessageInput({
       if (creditsBalance < 1) {
         setShowCreditsWarning(true);
         setTimeout(() => setShowCreditsWarning(false), 3000);
+        setMessage(trimmedMessage); // Restore message
         return;
       }
 
       setIsLoading(true);
       try {
         const aiMessage = trimmedMessage.replace('@Gwiz ', '');
+        // First send the user message
+        onSendMessage(trimmedMessage);
+        // Then send to AI
         await onSendAIMessage(aiMessage);
       } catch (error) {
         console.error('AI message failed:', error);
-        // Re-add the message back to input on error
-        setMessage(trimmedMessage);
+        // Don't restore message here since user message was already sent
       } finally {
         setIsLoading(false);
       }
@@ -58,13 +61,18 @@ export function MessageInput({
       return;
     }
 
+    const userMessage = message.trim();
+    setMessage(''); // Clear input immediately
     setIsLoading(true);
+    
     try {
-      await onSendAIMessage(message.trim());
-      setMessage('');
+      // First send the user message
+      onSendMessage(userMessage);
+      // Then send to AI
+      await onSendAIMessage(userMessage);
     } catch (error) {
       console.error('AI message failed:', error);
-      // Keep the message in the input on error
+      // Don't restore message since user message was already sent
     } finally {
       setIsLoading(false);
     }
