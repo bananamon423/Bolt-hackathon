@@ -39,6 +39,8 @@ export function MessageInput({
         await onSendAIMessage(aiMessage);
       } catch (error) {
         console.error('AI message failed:', error);
+        // Re-add the message back to input on error
+        setMessage(trimmedMessage);
       } finally {
         setIsLoading(false);
       }
@@ -62,6 +64,7 @@ export function MessageInput({
       setMessage('');
     } catch (error) {
       console.error('AI message failed:', error);
+      // Keep the message in the input on error
     } finally {
       setIsLoading(false);
     }

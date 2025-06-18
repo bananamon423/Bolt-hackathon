@@ -7,6 +7,7 @@ This file contains the corrected Supabase Edge Function code with the proper Gem
 1. **Correct Model Identifier:** Using 'gemini-1.5-flash' which is available and supported
 2. **Proper API Endpoint:** Using the correct v1beta API endpoint
 3. **Fallback Model:** Set a reliable fallback model identifier
+4. **Fixed Message Insertion:** Ensure AI messages are properly inserted with all required fields
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -164,7 +165,23 @@ Deno.serve(async (req: Request) => {
     const geminiData = await geminiResponse.json();
     const aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, but I couldn't generate a response.";
 
-    // Save AI message to your database
+    // First, insert the user's message
+    const { error: userMessageError } = await supabase
+      .from("messages")
+      .insert({
+        chat_id: chatId,
+        sender_id: user.id,
+        sender_type: "user",
+        content: message,
+        model_id: null,
+        token_cost: null,
+      });
+
+    if (userMessageError) {
+      console.error("Could not save user message:", userMessageError);
+    }
+
+    // Then save AI message to your database
     const { error: messageError } = await supabase
       .from("messages")
       .insert({

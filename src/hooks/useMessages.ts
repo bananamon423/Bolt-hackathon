@@ -27,18 +27,28 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           table: 'messages',
           filter: `chat_id=eq.${chatId}`
         },
-        (payload) => {
-          // Instead of refetching, append the new message.
-          // We also get the full profile info with it.
-          const newMessage = payload.new as Message;
-          
-          setMessages((currentMessages) => {
-            // Avoid adding duplicates if the message is already there from the optimistic update
-            if (currentMessages.find(m => m.id === newMessage.id)) {
-              return currentMessages;
-            }
-            return [...currentMessages, newMessage];
-          });
+        async (payload) => {
+          // Fetch the complete message with profile data
+          const { data: fullMessage, error } = await supabase
+            .from('messages')
+            .select(`
+              *,
+              profiles (
+                id,
+                username,
+                profile_picture_url
+              )
+            `)
+            .eq('id', payload.new.id)
+            .single();
+
+          if (!error && fullMessage) {
+            setMessages((currentMessages) => {
+              // Remove any existing message with the same ID (in case of duplicates)
+              const filteredMessages = currentMessages.filter(m => m.id !== fullMessage.id);
+              return [...filteredMessages, fullMessage];
+            });
+          }
         }
       )
       .subscribe();
@@ -50,7 +60,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
   const fetchMessages = async () => {
     if (!chatId) return;
-    setLoading(true); // Set loading true when fetching
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -79,20 +89,19 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
     // --- Start of Optimistic Update ---
     const optimisticMessage: Message = {
-      id: crypto.randomUUID(), // Generate a temporary unique ID
+      id: Date.now(), // Use timestamp as temporary ID
       chat_id: chatId,
       sender_id: userId,
       sender_type: 'user',
       content: content.trim(),
       created_at: new Date().toISOString(),
-      profiles: currentUser, // Use the currently logged-in user's profile info
+      profiles: currentUser,
     };
 
     setMessages(currentMessages => [...currentMessages, optimisticMessage]);
     // --- End of Optimistic Update ---
 
     try {
-      // The actual insert doesn't need to return data anymore
       const { error } = await supabase
         .from('messages')
         .insert({
@@ -103,22 +112,17 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         });
 
       if (error) {
-         // If error, remove the optimistic message
         console.error('Error sending message:', error);
         setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
       }
-      // No 'else' needed. The real message will arrive via subscription and replace the optimistic one if needed.
     } catch (error) {
       console.error('Error sending message:', error);
-       // If error, remove the optimistic message
       setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
     }
     return null;
   };
 
   const sendAIMessage = async (content: string, modelId: string) => {
-    // This function remains largely the same as it likely triggers a server-side insert
-    // which will be caught by the real-time subscription.
     if (!chatId || !content.trim()) return;
 
     try {
