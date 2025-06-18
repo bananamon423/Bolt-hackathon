@@ -39,11 +39,21 @@ export function MessageInput({
         const aiMessage = trimmedMessage.replace('@Gwiz ', '');
         // First send the user message
         onSendMessage(trimmedMessage);
-        // Then send to AI
-        await onSendAIMessage(aiMessage);
+        // Then send to AI (with timeout for better UX)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        );
+        
+        await Promise.race([
+          onSendAIMessage(aiMessage),
+          timeoutPromise
+        ]);
       } catch (error) {
         console.error('AI message failed:', error);
-        // Don't restore message here since user message was already sent
+        // Show user-friendly error
+        if (error.message.includes('timeout')) {
+          alert('AI response is taking longer than expected. Please try again.');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -68,11 +78,20 @@ export function MessageInput({
     try {
       // First send the user message
       onSendMessage(userMessage);
-      // Then send to AI
-      await onSendAIMessage(userMessage);
+      // Then send to AI with timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      );
+      
+      await Promise.race([
+        onSendAIMessage(userMessage),
+        timeoutPromise
+      ]);
     } catch (error) {
       console.error('AI message failed:', error);
-      // Don't restore message since user message was already sent
+      if (error.message.includes('timeout')) {
+        alert('AI response is taking longer than expected. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -129,7 +148,9 @@ export function MessageInput({
             ) : (
               <Bot className="w-4 h-4" />
             )}
-            <span className="hidden sm:inline">Gwiz</span>
+            <span className="hidden sm:inline">
+              {isLoading ? 'Thinking...' : 'Gwiz'}
+            </span>
           </button>
           
           <button

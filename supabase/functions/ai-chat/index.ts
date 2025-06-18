@@ -1,12 +1,11 @@
 /*
-# AI Chat Edge Function - Fixed Message Handling
+# AI Chat Edge Function - Optimized for Speed
 
-This file contains the corrected Supabase Edge Function that properly handles both user and AI messages.
-
-## Key Changes
-1. **Separate Message Insertion:** User message and AI response are inserted separately
-2. **Proper Message Flow:** Ensures both messages appear in the chat
-3. **Error Handling:** Better error handling for message insertion
+This optimized version reduces response time by:
+1. Parallel database operations
+2. Reduced context fetching
+3. Streamlined API calls
+4. Better error handling
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -32,15 +31,12 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Validate required environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    // Use hardcoded API key as requested
     const geminiApiKey = "AIzaSyDgzgvj-HARYBLmVEQJrE4dSh4HimbvozA";
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Missing Supabase configuration in environment variables.");
+      throw new Error("Missing Supabase configuration");
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -62,16 +58,35 @@ Deno.serve(async (req: Request) => {
     const { chatId, message, modelId }: RequestPayload = await req.json();
 
     if (!chatId || !message || !modelId) {
-      throw new Error("Missing required parameters: chatId, message, or modelId");
+      throw new Error("Missing required parameters");
     }
 
-    // Check user credits
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("credits_balance")
-      .eq("id", user.id)
-      .single();
+    // Parallel operations to reduce latency
+    const [profileResult, configResult, contextResult] = await Promise.all([
+      // Check user credits
+      supabase
+        .from("profiles")
+        .select("credits_balance")
+        .eq("id", user.id)
+        .single(),
+      
+      // Get context limit
+      supabase
+        .from("app_config")
+        .select("config_value")
+        .eq("config_key", "CONTEXT_MESSAGE_LIMIT")
+        .single(),
+      
+      // Get recent messages (limit to 5 for faster response)
+      supabase
+        .from("messages")
+        .select("content, sender_type, profiles(username)")
+        .eq("chat_id", chatId)
+        .order("created_at", { ascending: false })
+        .limit(5) // Reduced from configurable limit for speed
+    ]);
 
+    const { data: profile, error: profileError } = profileResult;
     if (profileError || !profile) {
       throw new Error("Could not fetch user profile");
     }
@@ -86,61 +101,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get context limit from config
-    const { data: config } = await supabase
-      .from("app_config")
-      .select("config_value")
-      .eq("config_key", "CONTEXT_MESSAGE_LIMIT")
-      .single();
-
-    const contextLimit = parseInt(config?.config_value || "10");
-
-    // Get recent messages for context
-    const { data: recentMessages } = await supabase
-      .from("messages")
-      .select(`
-        content,
-        sender_type,
-        profiles(username)
-      `)
-      .eq("chat_id", chatId)
-      .order("created_at", { ascending: false })
-      .limit(contextLimit);
-
-    // Get model info from your database
-    const { data: model } = await supabase
-      .from("llm_models")
-      .select("api_identifier")
-      .eq("id", modelId)
-      .single();
-      
-    // Use a working Gemini model identifier
-    let finalModelIdentifier = "gemini-1.5-flash";
-    
-    // Map old model identifiers to working ones
-    if (model?.api_identifier) {
-      switch (model.api_identifier) {
-        case 'gemini-pro':
-        case 'gemini-1.5-pro-latest':
-        case 'gemini-1.5-pro':
-          finalModelIdentifier = 'gemini-1.5-flash';
-          break;
-        case 'gemini-pro-vision':
-          finalModelIdentifier = 'gemini-1.5-flash';
-          break;
-        default:
-          finalModelIdentifier = 'gemini-1.5-flash';
-      }
-    }
-
-    // Build context for AI
-    const context = recentMessages?.reverse().map(msg => 
+    // Build minimal context for faster processing
+    const { data: recentMessages } = contextResult;
+    const context = recentMessages?.reverse().slice(-3).map(msg => 
       `${msg.sender_type === 'user' ? msg.profiles?.username || 'User' : 'Gwiz'}: ${msg.content}`
     ).join('\n') || '';
 
-    // Call Gemini API with the correct model identifier and endpoint
+    // Use the fastest Gemini model
+    const modelIdentifier = 'gemini-1.5-flash';
+
+    // Optimized prompt for faster response
+    const prompt = context 
+      ? `Recent context:\n${context}\n\nUser: ${message}\n\nGwiz (respond concisely):`
+      : `User: ${message}\n\nGwiz (respond concisely):`;
+
+    // Call Gemini API with optimized settings
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${finalModelIdentifier}:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelIdentifier}:generateContent?key=${geminiApiKey}`,
       {
         method: "POST",
         headers: {
@@ -148,61 +125,67 @@ Deno.serve(async (req: Request) => {
         },
         body: JSON.stringify({
           contents: [{
-            parts: [{
-              text: `Context:\n${context}\n\nUser: ${message}\n\nPlease respond as Gwiz, a helpful AI assistant.`
-            }]
-          }]
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            maxOutputTokens: 1000, // Limit response length for speed
+            temperature: 0.7,
+            topP: 0.8,
+            topK: 40
+          }
         }),
       }
     );
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
-      throw new Error(`Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText} - ${errorText}`);
+      throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
     }
 
     const geminiData = await geminiResponse.json();
-    const aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, but I couldn't generate a response.";
+    const aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 
+      "I apologize, but I couldn't generate a response.";
 
-    // Save ONLY the AI message to the database
-    // The user message should already be saved by the frontend
-    const { error: messageError } = await supabase
-      .from("messages")
-      .insert({
-        chat_id: chatId,
-        sender_id: null, // AI messages don't have a user sender_id
-        sender_type: "ai",
-        content: aiResponse,
-        model_id: modelId,
-        token_cost: 1,
-      });
+    // Parallel operations for database updates
+    const [messageResult, creditResult] = await Promise.all([
+      // Save AI message
+      supabase
+        .from("messages")
+        .insert({
+          chat_id: chatId,
+          sender_id: null,
+          sender_type: "ai",
+          content: aiResponse,
+          model_id: modelId,
+          token_cost: 1,
+        }),
+      
+      // Update credits
+      supabase
+        .from("profiles")
+        .update({ credits_balance: profile.credits_balance - 1 })
+        .eq("id", user.id)
+    ]);
 
-    if (messageError) {
-      throw new Error(`Could not save AI message: ${messageError.message}`);
+    if (messageResult.error) {
+      throw new Error(`Could not save AI message: ${messageResult.error.message}`);
     }
 
-    // Deduct credit and log transaction
-    const { error: creditError } = await supabase
-      .from("profiles")
-      .update({ credits_balance: profile.credits_balance - 1 })
-      .eq("id", user.id);
-
-    if (creditError) {
-      throw new Error(`Could not deduct credits: ${creditError.message}`);
+    if (creditResult.error) {
+      throw new Error(`Could not deduct credits: ${creditResult.error.message}`);
     }
 
-    const { error: transactionError } = await supabase
+    // Log transaction asynchronously (don't wait for it)
+    supabase
       .from("credit_transactions")
       .insert({
         user_id: user.id,
         amount: -1,
         description: "AI chat response",
         chat_id: chatId,
-      });
-
-    if (transactionError) {
-      console.error("Transaction logging failed:", transactionError);
-    }
+      })
+      .then(() => {}) // Fire and forget
+      .catch(err => console.error("Transaction logging failed:", err));
 
     return new Response(
       JSON.stringify({ success: true, response: aiResponse }),
@@ -214,14 +197,14 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("AI Chat Error:", error);
 
-    // Log the error to your database for monitoring
+    // Async error logging (don't wait for it)
     try {
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
       );
 
-      await supabase
+      supabase
         .from("error_logs")
         .insert({
           error_source: "AI Chat Function",
@@ -230,14 +213,14 @@ Deno.serve(async (req: Request) => {
             stack: error.stack,
             timestamp: new Date().toISOString(),
           },
-        });
-    } catch (logError) {
-      console.error("Failed to log error to database:", logError);
-    }
+        })
+        .then(() => {})
+        .catch(() => {});
+    } catch {}
 
-    const errorMessage = error.message.includes("Gemini API") 
-      ? `AI service error: ${error.message}`
-      : "Gwiz encountered an error. Please try again.";
+    const errorMessage = error.message.includes("Gemini") 
+      ? `AI service temporarily unavailable: ${error.message}`
+      : "Gwiz is temporarily unavailable. Please try again.";
 
     return new Response(
       JSON.stringify({ error: errorMessage }),
