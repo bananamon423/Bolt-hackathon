@@ -1,14 +1,12 @@
 /*
-# AI Chat Edge Function - Corrected Version
+# AI Chat Edge Function - Fixed Gemini API Integration
 
-This file contains the updated Supabase Edge Function code to fix the Gemini API error.
+This file contains the corrected Supabase Edge Function code with the proper Gemini API model identifier.
 
 ## Key Changes
-1.  **Model Identifier Fix:** Added logic to explicitly check for and replace the outdated 'gemini-pro'
-    model identifier with 'gemini-1.5-pro-latest'. This resolves the 404 Not Found error.
-2.  **API Key Security:** Removed the hardcoded Gemini API key. The key is now securely loaded
-    from environment variables, which is a critical security best practice. You must set
-    `GEMINI_API_KEY` in your Supabase Function settings.
+1. **Correct Model Identifier:** Using 'gemini-1.5-flash' which is available and supported
+2. **Proper API Endpoint:** Using the correct v1beta API endpoint
+3. **Fallback Model:** Set a reliable fallback model identifier
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -38,16 +36,11 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
-    // SECURITY FIX: Load Gemini API Key from environment variables.
-    // Never hardcode API keys in your code.
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    // Use hardcoded API key as requested
+    const geminiApiKey = "AIzaSyDgzgvj-HARYBLmVEQJrE4dSh4HimbvozA";
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error("Missing Supabase configuration in environment variables.");
-    }
-
-    if (!geminiApiKey) {
-        throw new Error("Missing GEMINI_API_KEY in environment variables.");
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -121,27 +114,33 @@ Deno.serve(async (req: Request) => {
       .eq("id", modelId)
       .single();
       
-    // --- START: FIX FOR OUTDATED MODEL IDENTIFIER ---
-    // This logic checks if the database returned the old 'gemini-pro' model name
-    // and updates it to a valid one to prevent the API error.
-    let finalModelIdentifier = model?.api_identifier;
-    if (finalModelIdentifier === 'gemini-pro') {
-        finalModelIdentifier = 'gemini-1.5-pro-latest';
+    // Use a working Gemini model identifier
+    let finalModelIdentifier = "gemini-1.5-flash";
+    
+    // Map old model identifiers to working ones
+    if (model?.api_identifier) {
+      switch (model.api_identifier) {
+        case 'gemini-pro':
+        case 'gemini-1.5-pro-latest':
+        case 'gemini-1.5-pro':
+          finalModelIdentifier = 'gemini-1.5-flash';
+          break;
+        case 'gemini-pro-vision':
+          finalModelIdentifier = 'gemini-1.5-flash';
+          break;
+        default:
+          finalModelIdentifier = 'gemini-1.5-flash';
+      }
     }
-    // If no model was found in the DB, use a reliable fallback.
-    if (!finalModelIdentifier) {
-        finalModelIdentifier = 'gemini-1.5-pro-latest';
-    }
-    // --- END: FIX ---
 
     // Build context for AI
     const context = recentMessages?.reverse().map(msg => 
       `${msg.sender_type === 'user' ? msg.profiles?.username || 'User' : 'Gwiz'}: ${msg.content}`
     ).join('\n') || '';
 
-    // Call Gemini API with the corrected model identifier
+    // Call Gemini API with the correct model identifier and endpoint
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/${finalModelIdentifier}:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${finalModelIdentifier}:generateContent?key=${geminiApiKey}`,
       {
         method: "POST",
         headers: {
@@ -174,7 +173,7 @@ Deno.serve(async (req: Request) => {
         sender_type: "ai",
         content: aiResponse,
         model_id: modelId,
-        token_cost: 1, // Note: You might want to implement actual token counting
+        token_cost: 1,
       });
 
     if (messageError) {
@@ -188,7 +187,6 @@ Deno.serve(async (req: Request) => {
       .eq("id", user.id);
 
     if (creditError) {
-      // Note: Consider how to handle this failure case. Maybe roll back the message?
       throw new Error(`Could not deduct credits: ${creditError.message}`);
     }
 
@@ -202,7 +200,6 @@ Deno.serve(async (req: Request) => {
       });
 
     if (transactionError) {
-      // This is a non-critical error, so we just log it.
       console.error("Transaction logging failed:", transactionError);
     }
 
