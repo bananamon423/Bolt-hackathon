@@ -51,12 +51,12 @@ export function MessageInput({
     // Handle mention dropdown navigation first
     const mentionHandled = handleKeyDown(e, message, currentCursorPosition);
     if (mentionHandled) {
-      // If mention was handled, update the message state
+      // CRITICAL FIX: Update React state immediately after mention is handled
       setTimeout(() => {
         if (textareaRef.current) {
           setMessage(textareaRef.current.value);
         }
-      }, 0);
+      }, 10); // Small delay to ensure DOM is updated
       return;
     }
 
@@ -75,6 +75,8 @@ export function MessageInput({
     const result = handleMentionSelect(option, message, cursorPosition);
     
     if (result) {
+      // Update textarea value directly
+      textarea.value = result.newText;
       setMessage(result.newText);
       
       // Set cursor position after the mention
@@ -135,7 +137,11 @@ export function MessageInput({
     if (!message.trim() || disabled || isLoading) {
       // If no message, insert @Gwiz mention
       if (!message.trim()) {
-        setMessage('@Gwiz ');
+        const newMessage = '@Gwiz ';
+        setMessage(newMessage);
+        if (textareaRef.current) {
+          textareaRef.current.value = newMessage;
+        }
         setTimeout(() => {
           if (textareaRef.current) {
             textareaRef.current.focus();

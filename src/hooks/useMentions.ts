@@ -145,24 +145,6 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
         return true;
       
       case 'Enter':
-        e.preventDefault();
-        e.stopPropagation();
-        if (mentionOptions[selectedIndex]) {
-          const selectedOption = mentionOptions[selectedIndex];
-          const result = handleMentionSelect(selectedOption, currentText, cursorPosition);
-          if (result && textareaRef.current) {
-            // Update the textarea value and cursor position
-            textareaRef.current.value = result.newText;
-            textareaRef.current.setSelectionRange(result.newCursorPosition, result.newCursorPosition);
-            textareaRef.current.focus();
-            
-            // Trigger change event to update React state
-            const event = new Event('input', { bubbles: true });
-            textareaRef.current.dispatchEvent(event);
-          }
-        }
-        return true;
-      
       case 'Tab':
         e.preventDefault();
         e.stopPropagation();
@@ -170,14 +152,20 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
           const selectedOption = mentionOptions[selectedIndex];
           const result = handleMentionSelect(selectedOption, currentText, cursorPosition);
           if (result && textareaRef.current) {
-            // Update the textarea value and cursor position
+            // CRITICAL FIX: Update the textarea value directly first
             textareaRef.current.value = result.newText;
-            textareaRef.current.setSelectionRange(result.newCursorPosition, result.newCursorPosition);
-            textareaRef.current.focus();
             
-            // Trigger change event to update React state
-            const event = new Event('input', { bubbles: true });
-            textareaRef.current.dispatchEvent(event);
+            // Set cursor position
+            setTimeout(() => {
+              if (textareaRef.current) {
+                textareaRef.current.setSelectionRange(result.newCursorPosition, result.newCursorPosition);
+                textareaRef.current.focus();
+                
+                // Trigger input event to sync with React state
+                const inputEvent = new Event('input', { bubbles: true });
+                textareaRef.current.dispatchEvent(inputEvent);
+              }
+            }, 0);
           }
         }
         return true;
