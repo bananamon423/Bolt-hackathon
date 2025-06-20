@@ -1,5 +1,5 @@
 /*
-# OpenRouter Multi-LLM Chat Function - Enhanced with Debugging
+# OpenRouter Multi-LLM Chat Function - Fixed API Key Reading
 
 This function handles AI chat requests through OpenRouter, supporting multiple LLM models
 with proper context management, token tracking, and credit system integration.
@@ -10,7 +10,7 @@ Features:
 - Token usage tracking
 - Credit system integration
 - Comprehensive error handling and logging
-- Enhanced debugging for API key issues
+- Fixed API key reading from Edge Function secrets
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -53,27 +53,6 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Add debugging block for API key diagnosis
-  console.log("--- DEBUGGING openrouter-chat FUNCTION ---");
-  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-  console.log("Attempting to read OPENROUTER_API_KEY from environment secrets...");
-  console.log("Value found:", apiKey ? "A key is present and was read successfully." : "!!! KEY IS MISSING OR UNDEFINED !!!");
-  
-  // Additional environment debugging
-  console.log("🔍 Environment Variables Check:");
-  console.log("- SUPABASE_URL:", Deno.env.get("SUPABASE_URL") ? "✅ Set" : "❌ Missing");
-  console.log("- SUPABASE_SERVICE_ROLE_KEY:", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ? "✅ Set" : "❌ Missing");
-  console.log("- OPENROUTER_API_KEY (direct):", apiKey ? `✅ Set (length: ${apiKey.length})` : "❌ Missing");
-  
-  // List all environment variables that start with common prefixes (for debugging)
-  console.log("🔍 Available environment variables:");
-  for (const [key, value] of Object.entries(Deno.env.toObject())) {
-    if (key.includes("OPENROUTER") || key.includes("API") || key.includes("KEY")) {
-      console.log(`- ${key}: ${value ? `Set (length: ${value.length})` : "Not set"}`);
-    }
-  }
-  // --- End of debugging block ---
-
   console.log("🚀 OpenRouter Chat function started");
 
   try {
@@ -86,28 +65,16 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get OpenRouter API key from app config
-    console.log("🔍 Attempting to fetch OPENROUTER_API_KEY from app_config table...");
-    const { data: configData, error: configError } = await supabase
-      .from("app_config")
-      .select("config_value")
-      .eq("config_key", "OPENROUTER_API_KEY")
-      .single();
+    // Get OpenRouter API key from Edge Function secrets
+    console.log("Attempting to read OPENROUTER_API_KEY from environment secrets...");
+    const openRouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
 
-    console.log("📊 App config query result:");
-    console.log("- Error:", configError);
-    console.log("- Data:", configData);
-    console.log("- Config value present:", configData?.config_value ? "✅ Yes" : "❌ No");
-    console.log("- Config value length:", configData?.config_value?.length || 0);
-
-    if (configError || !configData?.config_value) {
-      console.error("❌ OpenRouter API key not found in app_config");
-      console.error("Config error details:", configError);
-      throw new Error("OpenRouter API key not configured in database");
+    if (!openRouterApiKey) {
+      console.error("!!! FAILED to read OPENROUTER_API_KEY from environment secrets.");
+      throw new Error("OpenRouter API key not configured");
     }
 
-    const openRouterApiKey = configData.config_value;
-    console.log("✅ OpenRouter API key retrieved from database successfully");
+    console.log("✅ Successfully read OPENROUTER_API_KEY.");
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
