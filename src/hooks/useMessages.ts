@@ -17,9 +17,13 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
     fetchMessages();
 
-    // Subscribe to new messages
+    // Create a more specific channel name to avoid conflicts
+    const channelName = `messages-${chatId}`;
+    console.log('Setting up real-time subscription for channel:', channelName);
+
+    // Subscribe to new messages with better configuration
     const subscription = supabase
-      .channel(`messages:${chatId}`)
+      .channel(channelName)
       .on('postgres_changes',
         {
           event: 'INSERT',
@@ -28,49 +32,64 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           filter: `chat_id=eq.${chatId}`
         },
         async (payload) => {
-          console.log('New message received:', payload.new);
+          console.log('Real-time message received:', payload.new);
           
-          // Fetch the complete message with profile data
-          const { data: fullMessage, error } = await supabase
-            .from('messages')
-            .select(`
-              *,
-              profiles (
-                id,
-                username,
-                profile_picture_url
-              )
-            `)
-            .eq('id', payload.new.id)
-            .single();
+          // Add a small delay to ensure the database transaction is complete
+          setTimeout(async () => {
+            try {
+              // Fetch the complete message with profile data
+              const { data: fullMessage, error } = await supabase
+                .from('messages')
+                .select(`
+                  *,
+                  profiles (
+                    id,
+                    username,
+                    profile_picture_url
+                  )
+                `)
+                .eq('id', payload.new.id)
+                .single();
 
-          if (!error && fullMessage) {
-            console.log('Full message data:', fullMessage);
-            
-            setMessages((currentMessages) => {
-              // Check if message already exists (avoid duplicates)
-              const existingIndex = currentMessages.findIndex(m => m.id === fullMessage.id);
-              if (existingIndex >= 0) {
-                console.log('Replacing existing message');
-                // Replace existing message with complete data
-                const updatedMessages = [...currentMessages];
-                updatedMessages[existingIndex] = fullMessage;
-                return updatedMessages;
+              if (!error && fullMessage) {
+                console.log('Full message data fetched:', fullMessage);
+                
+                setMessages((currentMessages) => {
+                  // Check if message already exists (avoid duplicates)
+                  const existingIndex = currentMessages.findIndex(m => m.id === fullMessage.id);
+                  if (existingIndex >= 0) {
+                    console.log('Replacing existing message');
+                    // Replace existing message with complete data
+                    const updatedMessages = [...currentMessages];
+                    updatedMessages[existingIndex] = fullMessage;
+                    return updatedMessages;
+                  } else {
+                    console.log('Adding new message to list');
+                    // Add new message in correct chronological order
+                    const newMessages = [...currentMessages, fullMessage];
+                    return newMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                  }
+                });
               } else {
-                console.log('Adding new message to list');
-                // Add new message in correct chronological order
-                const newMessages = [...currentMessages, fullMessage];
-                return newMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                console.error('Error fetching full message:', error);
               }
-            });
-          } else {
-            console.error('Error fetching full message:', error);
-          }
+            } catch (err) {
+              console.error('Error in real-time message handler:', err);
+            }
+          }, 100); // Small delay to ensure database consistency
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to real-time messages');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Channel subscription error');
+        }
+      });
 
     return () => {
+      console.log('Unsubscribing from real-time messages');
       subscription.unsubscribe();
     };
   }, [chatId]);
@@ -211,6 +230,10 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       }
 
       console.log('AI message sent successfully');
+      
+      // The AI response will be automatically added via the real-time subscription
+      // No need to manually add it here
+      
       return result;
     } catch (error) {
       console.error('Error sending AI message:', error);
