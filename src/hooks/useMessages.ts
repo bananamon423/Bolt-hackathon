@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, Message } from '../lib/supabase';
-// Import the profile type from your Supabase library if you have it defined
-// For now, we'll create a minimal one here.
+
 type Profile = {
   id: string;
   username: string;
@@ -11,20 +10,47 @@ type Profile = {
 export function useMessages(chatId: string | undefined, currentUser: Profile | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const subscriptionRef = useRef<any>(null);
+  const lastMessageIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!chatId) return;
 
     fetchMessages();
+    setupRealtimeSubscription();
 
-    // Create a more specific channel name to avoid conflicts
-    const channelName = `messages-${chatId}`;
-    console.log('Setting up real-time subscription for channel:', channelName);
+    return () => {
+      cleanupSubscription();
+    };
+  }, [chatId]);
 
-    // Subscribe to new messages with better configuration
-    const subscription = supabase
-      .channel(channelName)
-      .on('postgres_changes',
+  const cleanupSubscription = () => {
+    if (subscriptionRef.current) {
+      console.log('Cleaning up subscription');
+      subscriptionRef.current.unsubscribe();
+      subscriptionRef.current = null;
+    }
+  };
+
+  const setupRealtimeSubscription = () => {
+    if (!chatId) return;
+
+    // Clean up any existing subscription
+    cleanupSubscription();
+
+    console.log('Setting up real-time subscription for chat:', chatId);
+
+    // Create subscription with a unique channel name
+    const channel = supabase.channel(`messages_${chatId}_${Date.now()}`, {
+      config: {
+        broadcast: { self: true },
+        presence: { key: 'user' }
+      }
+    });
+
+    subscriptionRef.current = channel
+      .on(
+        'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
@@ -32,73 +58,90 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           filter: `chat_id=eq.${chatId}`
         },
         async (payload) => {
-          console.log('Real-time message received:', payload.new);
+          console.log('🔥 Real-time message received:', payload);
           
-          // Add a small delay to ensure the database transaction is complete
-          setTimeout(async () => {
-            try {
-              // Fetch the complete message with profile data
-              const { data: fullMessage, error } = await supabase
-                .from('messages')
-                .select(`
-                  *,
-                  profiles (
-                    id,
-                    username,
-                    profile_picture_url
-                  )
-                `)
-                .eq('id', payload.new.id)
-                .single();
+          const newMessage = payload.new as any;
+          
+          // Avoid duplicate processing
+          if (lastMessageIdRef.current === newMessage.id) {
+            console.log('Duplicate message, skipping');
+            return;
+          }
+          
+          lastMessageIdRef.current = newMessage.id;
 
-              if (!error && fullMessage) {
-                console.log('Full message data fetched:', fullMessage);
-                
-                setMessages((currentMessages) => {
-                  // Check if message already exists (avoid duplicates)
-                  const existingIndex = currentMessages.findIndex(m => m.id === fullMessage.id);
-                  if (existingIndex >= 0) {
-                    console.log('Replacing existing message');
-                    // Replace existing message with complete data
-                    const updatedMessages = [...currentMessages];
-                    updatedMessages[existingIndex] = fullMessage;
-                    return updatedMessages;
-                  } else {
-                    console.log('Adding new message to list');
-                    // Add new message in correct chronological order
-                    const newMessages = [...currentMessages, fullMessage];
-                    return newMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-                  }
-                });
-              } else {
-                console.error('Error fetching full message:', error);
-              }
-            } catch (err) {
-              console.error('Error in real-time message handler:', err);
+          try {
+            // Fetch complete message with profile data
+            const { data: fullMessage, error } = await supabase
+              .from('messages')
+              .select(`
+                *,
+                profiles (
+                  id,
+                  username,
+                  profile_picture_url
+                )
+              `)
+              .eq('id', newMessage.id)
+              .single();
+
+            if (error) {
+              console.error('Error fetching full message:', error);
+              return;
             }
-          }, 100); // Small delay to ensure database consistency
+
+            if (fullMessage) {
+              console.log('✅ Adding message to UI:', fullMessage);
+              
+              setMessages(currentMessages => {
+                // Check if message already exists
+                const exists = currentMessages.some(m => m.id === fullMessage.id);
+                if (exists) {
+                  console.log('Message already exists, skipping');
+                  return currentMessages;
+                }
+
+                // Add new message and sort by timestamp
+                const newMessages = [...currentMessages, fullMessage];
+                return newMessages.sort((a, b) => 
+                  new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                );
+              });
+            }
+          } catch (err) {
+            console.error('Error processing real-time message:', err);
+          }
         }
       )
       .subscribe((status) => {
-        console.log('Subscription status:', status);
+        console.log('📡 Subscription status:', status);
+        
         if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to real-time messages');
+          console.log('✅ Successfully subscribed to real-time messages');
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('Channel subscription error');
+          console.error('❌ Channel subscription error');
+          // Retry subscription after a delay
+          setTimeout(() => {
+            console.log('🔄 Retrying subscription...');
+            setupRealtimeSubscription();
+          }, 2000);
+        } else if (status === 'TIMED_OUT') {
+          console.error('⏰ Subscription timed out');
+          // Retry subscription
+          setTimeout(() => {
+            console.log('🔄 Retrying subscription after timeout...');
+            setupRealtimeSubscription();
+          }, 1000);
         }
       });
-
-    return () => {
-      console.log('Unsubscribing from real-time messages');
-      subscription.unsubscribe();
-    };
-  }, [chatId]);
+  };
 
   const fetchMessages = async () => {
     if (!chatId) return;
     setLoading(true);
+    
     try {
-      console.log('Fetching messages for chat:', chatId);
+      console.log('📥 Fetching messages for chat:', chatId);
       
       const { data, error } = await supabase
         .from('messages')
@@ -115,8 +158,13 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       if (error) throw error;
       
-      console.log('Fetched messages:', data?.length || 0);
+      console.log('📥 Fetched', data?.length || 0, 'messages');
       setMessages(data || []);
+      
+      // Update last message ID reference
+      if (data && data.length > 0) {
+        lastMessageIdRef.current = data[data.length - 1].id;
+      }
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -127,12 +175,12 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const sendMessage = async (content: string, userId: string) => {
     if (!chatId || !content.trim() || !currentUser) return null;
 
-    console.log('Sending message:', content);
+    console.log('📤 Sending message:', content);
 
-    // Create optimistic message with a unique temporary ID
+    // Create optimistic message
     const tempId = `temp_${Date.now()}_${Math.random()}`;
     const optimisticMessage: Message = {
-      id: tempId as any, // Temporary ID for optimistic update
+      id: tempId as any,
       chat_id: chatId,
       sender_id: userId,
       sender_type: 'user',
@@ -164,7 +212,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         .single();
 
       if (error) {
-        console.error('Error sending message:', error);
+        console.error('❌ Error sending message:', error);
         // Remove optimistic message on error
         setMessages(currentMessages => 
           currentMessages.filter(m => m.id !== tempId)
@@ -172,7 +220,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw error;
       }
 
-      console.log('Message sent successfully:', insertedMessage);
+      console.log('✅ Message sent successfully');
 
       // Replace optimistic message with real message
       if (insertedMessage) {
@@ -186,7 +234,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       return insertedMessage;
     } catch (error) {
       console.error('Error sending message:', error);
-      // Remove optimistic message on error
       setMessages(currentMessages => 
         currentMessages.filter(m => m.id !== tempId)
       );
@@ -197,7 +244,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const sendAIMessage = async (content: string, modelId: string) => {
     if (!chatId || !content.trim()) return;
 
-    console.log('Sending AI message:', content);
+    console.log('🤖 Sending AI message:', content);
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -205,7 +252,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      console.log('Calling AI function...');
+      console.log('🔄 Calling AI function...');
 
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
         method: 'POST',
@@ -222,21 +269,25 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       const result = await response.json();
       
-      console.log('AI function response:', result);
+      console.log('🤖 AI function response:', result);
       
       if (!response.ok) {
-        console.error('AI function error:', result);
+        console.error('❌ AI function error:', result);
         throw new Error(result.error || 'AI request failed');
       }
 
-      console.log('AI message sent successfully');
+      console.log('✅ AI message request completed');
       
-      // The AI response will be automatically added via the real-time subscription
-      // No need to manually add it here
+      // The AI response should be automatically added via real-time subscription
+      // If it doesn't appear within 3 seconds, refresh messages
+      setTimeout(() => {
+        console.log('🔄 Checking if AI response appeared...');
+        fetchMessages();
+      }, 3000);
       
       return result;
     } catch (error) {
-      console.error('Error sending AI message:', error);
+      console.error('❌ Error sending AI message:', error);
       throw error;
     }
   };

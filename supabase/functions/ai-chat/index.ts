@@ -1,13 +1,7 @@
 /*
-# AI Chat Edge Function - Fixed Model Identifier
+# AI Chat Edge Function - Enhanced with Better Logging
 
-This fixes the Gemini API model identifier issue and improves error handling.
-
-Key fixes:
-1. Use correct Gemini model identifier
-2. Better error handling and logging
-3. Improved response time optimization
-4. More robust API calls
+This version includes comprehensive logging to help debug real-time issues.
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -32,6 +26,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  console.log("🚀 AI Chat function started");
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -39,10 +35,6 @@ Deno.serve(async (req: Request) => {
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error("Missing Supabase configuration");
-    }
-
-    if (!geminiApiKey) {
-      throw new Error("Missing Gemini API key");
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -58,7 +50,7 @@ Deno.serve(async (req: Request) => {
     );
 
     if (authError || !user) {
-      console.error("Auth error:", authError);
+      console.error("❌ Auth error:", authError);
       throw new Error("Invalid authentication");
     }
 
@@ -68,33 +60,22 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing required parameters");
     }
 
-    console.log("Processing AI request for user:", user.id, "chat:", chatId);
+    console.log(`👤 User ${user.id} asking: "${message}" in chat ${chatId}`);
 
-    // Parallel operations to reduce latency
-    const [profileResult, contextResult] = await Promise.all([
-      // Check user credits
-      supabase
-        .from("profiles")
-        .select("credits_balance")
-        .eq("id", user.id)
-        .single(),
-      
-      // Get recent messages (limit to 5 for faster response)
-      supabase
-        .from("messages")
-        .select("content, sender_type, profiles(username)")
-        .eq("chat_id", chatId)
-        .order("created_at", { ascending: false })
-        .limit(5)
-    ]);
+    // Check user credits
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("credits_balance")
+      .eq("id", user.id)
+      .single();
 
-    const { data: profile, error: profileError } = profileResult;
     if (profileError || !profile) {
-      console.error("Profile error:", profileError);
+      console.error("❌ Profile error:", profileError);
       throw new Error("Could not fetch user profile");
     }
 
     if (profile.credits_balance < 1) {
+      console.log("❌ Insufficient credits");
       return new Response(
         JSON.stringify({ error: "Insufficient credits" }),
         {
@@ -104,23 +85,26 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Build context for better AI responses
-    const { data: recentMessages } = contextResult;
+    // Get recent messages for context
+    const { data: recentMessages } = await supabase
+      .from("messages")
+      .select("content, sender_type, profiles(username)")
+      .eq("chat_id", chatId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
     const context = recentMessages?.reverse().slice(-3).map(msg => 
       `${msg.sender_type === 'user' ? msg.profiles?.username || 'User' : 'Gwiz'}: ${msg.content}`
     ).join('\n') || '';
 
-    // Use the correct Gemini model identifier
-    const modelIdentifier = 'gemini-1.5-flash'; // This is the correct model name
-
-    // Build the prompt with context
+    const modelIdentifier = 'gemini-1.5-flash';
     const prompt = context 
       ? `Previous conversation:\n${context}\n\nUser: ${message}\n\nGwiz (respond helpfully and concisely):`
       : `User: ${message}\n\nGwiz (respond helpfully and concisely):`;
 
-    console.log("Calling Gemini API with model:", modelIdentifier);
+    console.log("🤖 Calling Gemini API...");
 
-    // Call Gemini API with correct model identifier
+    // Call Gemini API
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelIdentifier}:generateContent?key=${geminiApiKey}`,
       {
@@ -144,48 +128,53 @@ Deno.serve(async (req: Request) => {
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
-      console.error("Gemini API error:", geminiResponse.status, errorText);
+      console.error("❌ Gemini API error:", geminiResponse.status, errorText);
       throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
     }
 
     const geminiData = await geminiResponse.json();
-    console.log("Gemini response received");
-
     const aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 
       "I apologize, but I couldn't generate a response. Please try again.";
 
-    // Parallel operations for database updates
-    const [messageResult, creditResult] = await Promise.all([
-      // Save AI message
-      supabase
-        .from("messages")
-        .insert({
-          chat_id: chatId,
-          sender_id: null,
-          sender_type: "ai",
-          content: aiResponse,
-          model_id: modelId,
-          token_cost: 1,
-        }),
-      
-      // Update credits
-      supabase
-        .from("profiles")
-        .update({ credits_balance: profile.credits_balance - 1 })
-        .eq("id", user.id)
-    ]);
+    console.log("✅ Gemini response received, length:", aiResponse.length);
 
-    if (messageResult.error) {
-      console.error("Message save error:", messageResult.error);
-      throw new Error(`Could not save AI message: ${messageResult.error.message}`);
+    // Save AI message to database
+    console.log("💾 Saving AI message to database...");
+    
+    const { data: savedMessage, error: messageError } = await supabase
+      .from("messages")
+      .insert({
+        chat_id: chatId,
+        sender_id: null,
+        sender_type: "ai",
+        content: aiResponse,
+        model_id: modelId,
+        token_cost: 1,
+      })
+      .select()
+      .single();
+
+    if (messageError) {
+      console.error("❌ Message save error:", messageError);
+      throw new Error(`Could not save AI message: ${messageError.message}`);
     }
 
-    if (creditResult.error) {
-      console.error("Credit update error:", creditResult.error);
-      throw new Error(`Could not deduct credits: ${creditResult.error.message}`);
+    console.log("✅ AI message saved with ID:", savedMessage.id);
+
+    // Update user credits
+    const { error: creditError } = await supabase
+      .from("profiles")
+      .update({ credits_balance: profile.credits_balance - 1 })
+      .eq("id", user.id);
+
+    if (creditError) {
+      console.error("❌ Credit update error:", creditError);
+      throw new Error(`Could not deduct credits: ${creditError.message}`);
     }
 
-    // Log transaction asynchronously (don't wait for it)
+    console.log("✅ Credits updated");
+
+    // Log transaction (fire and forget)
     supabase
       .from("credit_transactions")
       .insert({
@@ -194,22 +183,26 @@ Deno.serve(async (req: Request) => {
         description: "AI chat response",
         chat_id: chatId,
       })
-      .then(() => console.log("Transaction logged"))
-      .catch(err => console.error("Transaction logging failed:", err));
+      .then(() => console.log("✅ Transaction logged"))
+      .catch(err => console.error("❌ Transaction logging failed:", err));
 
-    console.log("AI response completed successfully");
+    console.log("🎉 AI response completed successfully");
 
     return new Response(
-      JSON.stringify({ success: true, response: aiResponse }),
+      JSON.stringify({ 
+        success: true, 
+        response: aiResponse,
+        messageId: savedMessage.id 
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
 
   } catch (error) {
-    console.error("AI Chat Error:", error);
+    console.error("💥 AI Chat Error:", error);
 
-    // Async error logging (don't wait for it)
+    // Log error to database (fire and forget)
     try {
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
@@ -226,8 +219,8 @@ Deno.serve(async (req: Request) => {
             timestamp: new Date().toISOString(),
           },
         })
-        .then(() => console.log("Error logged"))
-        .catch(() => console.error("Error logging failed"));
+        .then(() => console.log("✅ Error logged"))
+        .catch(() => console.error("❌ Error logging failed"));
     } catch {}
 
     const errorMessage = error.message.includes("Gemini") 
