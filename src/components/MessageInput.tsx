@@ -48,9 +48,17 @@ export function MessageInput({
     const textarea = e.target as HTMLTextAreaElement;
     const currentCursorPosition = textarea.selectionStart || 0;
     
-    // Handle mention dropdown navigation
+    // Handle mention dropdown navigation first
     const mentionHandled = handleKeyDown(e, message, currentCursorPosition);
-    if (mentionHandled) return;
+    if (mentionHandled) {
+      // If mention was handled, update the message state
+      setTimeout(() => {
+        if (textareaRef.current) {
+          setMessage(textareaRef.current.value);
+        }
+      }, 0);
+      return;
+    }
 
     // Handle regular Enter key for sending message
     if (e.key === 'Enter' && !e.shiftKey) {

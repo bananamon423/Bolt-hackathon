@@ -80,8 +80,6 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
   const calculateDropdownPosition = (textarea: HTMLTextAreaElement, cursorPosition: number, text: string) => {
     const rect = textarea.getBoundingClientRect();
     const style = window.getComputedStyle(textarea);
-    const fontSize = parseInt(style.fontSize);
-    const lineHeight = parseInt(style.lineHeight) || fontSize * 1.2;
     
     // Create a temporary div to measure text
     const tempDiv = document.createElement('div');
@@ -102,8 +100,8 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
     const tempRect = tempDiv.getBoundingClientRect();
     document.body.removeChild(tempDiv);
     
-    // Calculate position
-    const top = rect.top - 200; // Position above the textarea
+    // Calculate position - show above the textarea
+    const top = rect.top - 200;
     const left = Math.min(rect.left + (tempRect.width % rect.width), window.innerWidth - 250);
     
     return { top, left };
@@ -136,24 +134,57 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
+        e.stopPropagation();
         setSelectedIndex(prev => (prev + 1) % mentionOptions.length);
         return true;
       
       case 'ArrowUp':
         e.preventDefault();
+        e.stopPropagation();
         setSelectedIndex(prev => prev === 0 ? mentionOptions.length - 1 : prev - 1);
         return true;
       
       case 'Enter':
-      case 'Tab':
         e.preventDefault();
+        e.stopPropagation();
         if (mentionOptions[selectedIndex]) {
           const selectedOption = mentionOptions[selectedIndex];
-          handleMentionSelect(selectedOption, currentText, cursorPosition);
+          const result = handleMentionSelect(selectedOption, currentText, cursorPosition);
+          if (result && textareaRef.current) {
+            // Update the textarea value and cursor position
+            textareaRef.current.value = result.newText;
+            textareaRef.current.setSelectionRange(result.newCursorPosition, result.newCursorPosition);
+            textareaRef.current.focus();
+            
+            // Trigger change event to update React state
+            const event = new Event('input', { bubbles: true });
+            textareaRef.current.dispatchEvent(event);
+          }
+        }
+        return true;
+      
+      case 'Tab':
+        e.preventDefault();
+        e.stopPropagation();
+        if (mentionOptions[selectedIndex]) {
+          const selectedOption = mentionOptions[selectedIndex];
+          const result = handleMentionSelect(selectedOption, currentText, cursorPosition);
+          if (result && textareaRef.current) {
+            // Update the textarea value and cursor position
+            textareaRef.current.value = result.newText;
+            textareaRef.current.setSelectionRange(result.newCursorPosition, result.newCursorPosition);
+            textareaRef.current.focus();
+            
+            // Trigger change event to update React state
+            const event = new Event('input', { bubbles: true });
+            textareaRef.current.dispatchEvent(event);
+          }
         }
         return true;
       
       case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
         setShowDropdown(false);
         return true;
       
