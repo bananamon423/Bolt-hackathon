@@ -1,5 +1,5 @@
 /*
-# OpenRouter Multi-LLM Chat Function
+# OpenRouter Multi-LLM Chat Function - Enhanced with Debugging
 
 This function handles AI chat requests through OpenRouter, supporting multiple LLM models
 with proper context management, token tracking, and credit system integration.
@@ -10,6 +10,7 @@ Features:
 - Token usage tracking
 - Credit system integration
 - Comprehensive error handling and logging
+- Enhanced debugging for API key issues
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -52,6 +53,27 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // Add debugging block for API key diagnosis
+  console.log("--- DEBUGGING openrouter-chat FUNCTION ---");
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+  console.log("Attempting to read OPENROUTER_API_KEY from environment secrets...");
+  console.log("Value found:", apiKey ? "A key is present and was read successfully." : "!!! KEY IS MISSING OR UNDEFINED !!!");
+  
+  // Additional environment debugging
+  console.log("🔍 Environment Variables Check:");
+  console.log("- SUPABASE_URL:", Deno.env.get("SUPABASE_URL") ? "✅ Set" : "❌ Missing");
+  console.log("- SUPABASE_SERVICE_ROLE_KEY:", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ? "✅ Set" : "❌ Missing");
+  console.log("- OPENROUTER_API_KEY (direct):", apiKey ? `✅ Set (length: ${apiKey.length})` : "❌ Missing");
+  
+  // List all environment variables that start with common prefixes (for debugging)
+  console.log("🔍 Available environment variables:");
+  for (const [key, value] of Object.entries(Deno.env.toObject())) {
+    if (key.includes("OPENROUTER") || key.includes("API") || key.includes("KEY")) {
+      console.log(`- ${key}: ${value ? `Set (length: ${value.length})` : "Not set"}`);
+    }
+  }
+  // --- End of debugging block ---
+
   console.log("🚀 OpenRouter Chat function started");
 
   try {
@@ -65,17 +87,27 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get OpenRouter API key from app config
+    console.log("🔍 Attempting to fetch OPENROUTER_API_KEY from app_config table...");
     const { data: configData, error: configError } = await supabase
       .from("app_config")
       .select("config_value")
       .eq("config_key", "OPENROUTER_API_KEY")
       .single();
 
+    console.log("📊 App config query result:");
+    console.log("- Error:", configError);
+    console.log("- Data:", configData);
+    console.log("- Config value present:", configData?.config_value ? "✅ Yes" : "❌ No");
+    console.log("- Config value length:", configData?.config_value?.length || 0);
+
     if (configError || !configData?.config_value) {
-      throw new Error("OpenRouter API key not configured");
+      console.error("❌ OpenRouter API key not found in app_config");
+      console.error("Config error details:", configError);
+      throw new Error("OpenRouter API key not configured in database");
     }
 
     const openRouterApiKey = configData.config_value;
+    console.log("✅ OpenRouter API key retrieved from database successfully");
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -108,8 +140,11 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (modelError || !modelData) {
+      console.error("❌ Model lookup error:", modelError);
       throw new Error("Invalid model ID");
     }
+
+    console.log("✅ Model found:", modelData.model_name, "API:", modelData.api_identifier);
 
     // Check user credits
     const { data: profile, error: profileError } = await supabase
@@ -179,6 +214,7 @@ Deno.serve(async (req: Request) => {
     });
 
     console.log(`🤖 Calling OpenRouter with ${contextMessages.length} context messages`);
+    console.log("🔑 Using API key for OpenRouter request...");
 
     // Call OpenRouter API
     const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -206,10 +242,29 @@ Deno.serve(async (req: Request) => {
       }),
     });
 
+    console.log("📡 OpenRouter API response status:", openRouterResponse.status);
+
     if (!openRouterResponse.ok) {
       const errorText = await openRouterResponse.text();
       console.error("❌ OpenRouter API error:", openRouterResponse.status, errorText);
-      throw new Error(`OpenRouter API error: ${openRouterResponse.status} - ${errorText}`);
+      console.error("❌ OpenRouter response headers:", Object.fromEntries(openRouterResponse.headers.entries()));
+      
+      // Return specific error details
+      return new Response(
+        JSON.stringify({ 
+          error: `OpenRouter API error: ${openRouterResponse.status} - ${errorText}`,
+          details: {
+            status: openRouterResponse.status,
+            statusText: openRouterResponse.statusText,
+            response: errorText,
+            apiKeyConfigured: !!openRouterApiKey
+          }
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const openRouterData: OpenRouterResponse = await openRouterResponse.json();
@@ -303,6 +358,7 @@ Deno.serve(async (req: Request) => {
 
   } catch (error) {
     console.error("💥 OpenRouter Chat Error:", error);
+    console.error("💥 Error stack:", error.stack);
 
     // Log error to database (fire and forget)
     try {
@@ -325,14 +381,23 @@ Deno.serve(async (req: Request) => {
         .catch(() => console.error("❌ Error logging failed"));
     } catch {}
 
+    // Return specific error message
     const errorMessage = error.message.includes("OpenRouter") 
       ? `AI service error: ${error.message}`
       : error.message.includes("credits")
       ? error.message
-      : "AI service temporarily unavailable. Please try again.";
+      : error.message.includes("configured")
+      ? `Configuration error: ${error.message}`
+      : `Function error: ${error.message}`;
 
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: errorMessage,
+        details: {
+          type: "function_error",
+          originalError: error.message
+        }
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
