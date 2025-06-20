@@ -76,13 +76,40 @@ export function LastUsedLLMIndicator({ className = '' }: LastUsedLLMIndicatorPro
     );
   }
 
+  // Special handling for Gwiz (hardcoded model)
+  if (lastUsedModel === 'google/gemini-1.5-flash') {
+    return (
+      <div className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg shadow-sm ${className}`}>
+        <div className="flex items-center gap-1">
+          <Sparkles className="w-4 h-4" />
+          <span className="text-sm font-medium">🤖</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold">Gwiz</span>
+          <div className="flex items-center gap-1 text-xs opacity-90">
+            <Clock className="w-3 h-3" />
+            <span>Last used</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle OpenRouter models
   const modelConfig = OPENROUTER_MODELS[lastUsedModel as OpenRouterModelId];
   
   if (!modelConfig) {
+    // Fallback for unknown models
     return (
       <div className={`flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg ${className}`}>
         <Bot className="w-4 h-4 text-gray-500" />
-        <span className="text-sm text-gray-600">Unknown model</span>
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-gray-700">Unknown Model</span>
+          <div className="flex items-center gap-1 text-xs text-gray-500">
+            <Clock className="w-3 h-3" />
+            <span>Last used</span>
+          </div>
+        </div>
       </div>
     );
   }
