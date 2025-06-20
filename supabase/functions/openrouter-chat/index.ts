@@ -46,6 +46,13 @@ interface OpenRouterResponse {
 }
 
 Deno.serve(async (req: Request) => {
+  // --- Start of debugging block ---
+  console.log("--- DEBUGGING openrouter-chat FUNCTION v2 ---");
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+  console.log("Attempting to read OPENROUTER_API_KEY from environment secrets...");
+  console.log("Value found:", apiKey ? "A key IS present." : "!!! CRITICAL: KEY IS MISSING OR UNDEFINED !!!");
+  // --- End of debugging block ---
+
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
