@@ -245,7 +245,12 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const sendAIMessage = async (content: string, modelId: string, modelName?: string) => {
     if (!chatId || !content.trim()) return;
 
-    console.log('🤖 Sending AI message:', content, 'Model:', modelName, 'ModelId:', modelId);
+    console.log('🤖 Sending AI message:', {
+      content,
+      modelId,
+      modelName,
+      chatId
+    });
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -253,15 +258,19 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      // *** ENHANCED ROUTING LOGIC ***
+      // *** ENHANCED ROUTING LOGIC - FIXED VERSION ***
       let functionToInvoke = '';
       let functionPayload = {};
 
-      // Check if the mentioned model is exactly 'Gwiz' (case-insensitive and flexible)
+      // Check if the model is exactly 'Gwiz' or the hardcoded ID
       const isGwizModel = modelName === 'Gwiz' || 
-                         modelName === 'gwiz' || 
-                         modelId === 'gwiz-hardcoded' ||
-                         content.toLowerCase().includes('@gwiz');
+                         modelId === 'gwiz-hardcoded';
+
+      console.log('🔄 Routing decision:', {
+        modelName,
+        modelId,
+        isGwizModel
+      });
 
       if (isGwizModel) {
         // Route to ai-chat function for Gwiz (uses hardcoded VITE_GEMINI_API_KEY)
@@ -274,7 +283,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         };
       } else {
         // For all other models, use the OpenRouter function
-        console.log('🔄 Routing to openrouter-chat function for:', modelName);
+        console.log('🔄 ✅ ROUTING TO OPENROUTER-CHAT FUNCTION FOR:', modelName);
         functionToInvoke = 'openrouter-chat';
         functionPayload = {
           chatId,

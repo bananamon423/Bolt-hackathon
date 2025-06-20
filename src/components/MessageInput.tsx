@@ -47,10 +47,14 @@ export function MessageInput({
     availableModels 
   });
 
-  // Enhanced AI mention detection
+  // Enhanced AI mention detection - FIXED VERSION
   const getAIMentionFromMessage = (text: string) => {
-    // Check for @Gwiz first (case-insensitive)
-    if (text.toLowerCase().includes('@gwiz')) {
+    console.log('🔍 Analyzing message for AI mentions:', text);
+    
+    // First, check for @Gwiz (case-insensitive, exact match)
+    const gwizMatch = text.match(/@gwiz\b/i);
+    if (gwizMatch) {
+      console.log('✅ Found @Gwiz mention');
       return {
         id: 'gwiz-hardcoded',
         name: 'Gwiz',
@@ -59,20 +63,51 @@ export function MessageInput({
       };
     }
 
-    // Check for other AI models from database
-    const aiModels = availableModels.map(model => model.model_name);
-    for (const modelName of aiModels) {
-      if (text.includes(`@${modelName}`)) {
-        const model = availableModels.find(m => m.model_name === modelName);
-        return model ? {
-          id: model.id,
-          name: model.model_name,
-          apiIdentifier: model.api_identifier,
-          cost: model.cost_per_token
-        } : null;
+    // Then check for other AI models from database
+    // Look for @modelName patterns
+    const mentionMatches = text.match(/@(\w+(?:[.\-/]\w+)*)/g);
+    if (mentionMatches) {
+      console.log('🔍 Found mention patterns:', mentionMatches);
+      
+      for (const match of mentionMatches) {
+        const mentionedName = match.substring(1); // Remove the @
+        console.log('🔍 Checking mentioned name:', mentionedName);
+        
+        // Try to find a model that matches this mention
+        const matchedModel = availableModels.find(model => {
+          // Check if the mention matches the model name (case-insensitive)
+          const nameMatch = model.model_name.toLowerCase() === mentionedName.toLowerCase();
+          
+          // Check if the mention matches part of the API identifier
+          const apiMatch = model.api_identifier.toLowerCase().includes(mentionedName.toLowerCase());
+          
+          // Check if the mention matches the exact API identifier
+          const exactApiMatch = model.api_identifier.toLowerCase() === mentionedName.toLowerCase();
+          
+          console.log(`🔍 Checking model ${model.model_name}:`, {
+            nameMatch,
+            apiMatch,
+            exactApiMatch,
+            modelName: model.model_name,
+            apiIdentifier: model.api_identifier
+          });
+          
+          return nameMatch || exactApiMatch || (apiMatch && mentionedName.length > 3);
+        });
+        
+        if (matchedModel) {
+          console.log('✅ Found matching model:', matchedModel);
+          return {
+            id: matchedModel.id,
+            name: matchedModel.model_name,
+            apiIdentifier: matchedModel.api_identifier,
+            cost: matchedModel.cost_per_token
+          };
+        }
       }
     }
     
+    console.log('❌ No AI model mentions found');
     return null;
   };
 
@@ -144,6 +179,12 @@ export function MessageInput({
     const trimmedMessage = message.trim();
     const currentAIMention = getAIMentionFromMessage(trimmedMessage);
 
+    console.log('🚀 Submitting message:', {
+      message: trimmedMessage,
+      aiMention: currentAIMention,
+      isAIMessage: !!currentAIMention
+    });
+
     if (currentAIMention) {
       if (creditsBalance < currentAIMention.cost) {
         setShowCreditsWarning(true);
@@ -155,10 +196,18 @@ export function MessageInput({
       try {
         // Extract the actual message content (remove the @mention)
         let aiMessage = trimmedMessage;
+        
+        // Remove the mention from the message
         if (currentAIMention.name === 'Gwiz') {
-          aiMessage = trimmedMessage.replace(/@gwiz/gi, '').trim();
+          aiMessage = trimmedMessage.replace(/@gwiz\b/gi, '').trim();
         } else {
-          aiMessage = trimmedMessage.replace(`@${currentAIMention.name}`, '').trim();
+          // For other models, remove the mention pattern
+          const mentionPattern = new RegExp(`@${currentAIMention.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+          aiMessage = trimmedMessage.replace(mentionPattern, '').trim();
+          
+          // Also try removing by API identifier if the mention was that
+          const apiPattern = new RegExp(`@${currentAIMention.apiIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+          aiMessage = aiMessage.replace(apiPattern, '').trim();
         }
         
         // First send the user message with the mention
@@ -172,7 +221,8 @@ export function MessageInput({
         console.log('🚀 Sending to AI:', {
           message: aiMessage,
           modelId: currentAIMention.id,
-          modelName: currentAIMention.name
+          modelName: currentAIMention.name,
+          apiIdentifier: currentAIMention.apiIdentifier
         });
         
         await Promise.race([
