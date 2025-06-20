@@ -12,6 +12,15 @@ interface ChatHeaderProps {
   onlineUsers: string[];
 }
 
+// Define Gwiz as a special hardcoded model
+const GWIZ_MODEL: LLMModel = {
+  id: 'gwiz-hardcoded',
+  model_name: 'Gwiz',
+  api_identifier: 'google/gemini-1.5-flash',
+  cost_per_token: 1,
+  is_active: true
+};
+
 export function ChatHeader({ 
   chat, 
   models, 
@@ -25,6 +34,9 @@ export function ChatHeader({
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Combine Gwiz with other models, putting Gwiz first
+  const allModels = [GWIZ_MODEL, ...models];
 
   const handleSaveTitle = () => {
     if (title.trim() && title !== chat?.chat_title) {
@@ -155,7 +167,7 @@ export function ChatHeader({
                   <div className="text-xs font-medium text-gray-500 mb-2 px-2">
                     Available AI Models:
                   </div>
-                  {models.map((model) => (
+                  {allModels.map((model) => (
                     <button
                       key={model.id}
                       onClick={() => handleModelSelect(model)}
@@ -165,7 +177,14 @@ export function ChatHeader({
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-medium text-gray-900">{model.model_name}</div>
+                          <div className="font-medium text-gray-900 flex items-center gap-2">
+                            {model.model_name}
+                            {model.id === 'gwiz-hardcoded' && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+                                🤖 Hardcoded
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-gray-500">{model.api_identifier}</div>
                         </div>
                         <div className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">

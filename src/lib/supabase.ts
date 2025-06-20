@@ -75,6 +75,12 @@ export const OPENROUTER_MODELS = {
     icon: '🧠',
     color: 'from-blue-500 to-cyan-500'
   },
+  'google/gemini-1.5-flash': {
+    name: 'Gwiz (Gemini)',
+    description: 'Hardcoded Gemini model',
+    icon: '🤖',
+    color: 'from-purple-500 to-pink-500'
+  },
   'openai/gpt-4-turbo': {
     name: 'GPT-4.1',
     description: 'OpenAI\'s most advanced model',

@@ -15,6 +15,15 @@ import { SharedChatPage } from './pages/SharedChatPage';
 import { Chat, LLMModel } from './lib/supabase';
 import { supabase } from './lib/supabase';
 
+// Define Gwiz as a special hardcoded model
+const GWIZ_MODEL: LLMModel = {
+  id: 'gwiz-hardcoded',
+  model_name: 'Gwiz',
+  api_identifier: 'google/gemini-1.5-flash',
+  cost_per_token: 1,
+  is_active: true
+};
+
 function MainApp() {
   // 1. Get the authenticated user first.
   const { user, profile, loading, signIn, signUp, signOut, refreshProfile } = useAuth();
@@ -32,12 +41,15 @@ function MainApp() {
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
 
-  // Set default model
+  // Combine Gwiz with other models for all components
+  const allModels = [GWIZ_MODEL, ...models];
+
+  // Set default model (Gwiz first)
   useEffect(() => {
-    if (models.length > 0 && !selectedModel) {
-      setSelectedModel(models[0]);
+    if (allModels.length > 0 && !selectedModel) {
+      setSelectedModel(GWIZ_MODEL); // Default to Gwiz
     }
-  }, [models, selectedModel]);
+  }, [allModels, selectedModel]);
 
   // Auto-select first chat if none selected
   useEffect(() => {
@@ -64,6 +76,7 @@ function MainApp() {
   };
 
   const handleModelChange = async (model: LLMModel) => {
+    console.log('🔄 Model changed to:', model.model_name, 'ID:', model.id);
     setSelectedModel(model);
     
     // Add system message about model switch
@@ -97,15 +110,23 @@ function MainApp() {
       try {
         // Use provided modelId or fall back to selected model
         const targetModelId = modelId || selectedModel?.id;
+        const targetModelName = modelName || selectedModel?.model_name;
+        
         if (!targetModelId) {
           throw new Error('No model selected');
         }
 
-        await sendAIMessage(content, targetModelId);
+        console.log('🚀 App.tsx - Sending AI message:', {
+          content,
+          targetModelId,
+          targetModelName
+        });
+
+        await sendAIMessage(content, targetModelId, targetModelName);
         
         // Update last used LLM in database
-        if (modelName) {
-          const targetModel = models.find(m => m.model_name === modelName);
+        if (targetModelName) {
+          const targetModel = allModels.find(m => m.model_name === targetModelName);
           if (targetModel) {
             await supabase.rpc('update_last_used_llm', {
               model_identifier: targetModel.api_identifier
@@ -159,7 +180,7 @@ function MainApp() {
       <div className="flex-1 flex flex-col">
         <ChatHeader
           chat={currentChat}
-          models={models}
+          models={allModels}
           selectedModel={selectedModel}
           onUpdateTitle={handleUpdateTitle}
           onModelChange={handleModelChange}
@@ -179,7 +200,7 @@ function MainApp() {
               onSendAIMessage={handleSendAIMessage}
               creditsBalance={profile.credits_balance}
               onlineUsers={onlineUsers}
-              availableModels={models}
+              availableModels={allModels}
             />
           </>
         ) : (
