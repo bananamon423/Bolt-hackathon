@@ -1,5 +1,5 @@
 /*
-# OpenRouter Multi-LLM Chat Function - Fixed API Key Reading
+# OpenRouter Multi-LLM Chat Function - Fixed Authorization Headers
 
 This function handles AI chat requests through OpenRouter, supporting multiple LLM models
 with proper context management, token tracking, and credit system integration.
@@ -11,6 +11,7 @@ Features:
 - Credit system integration
 - Comprehensive error handling and logging
 - Fixed API key reading from Edge Function secrets
+- Fixed authorization header handling
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -191,14 +192,16 @@ Deno.serve(async (req: Request) => {
     console.log("🔑 Using API key for OpenRouter request...");
 
     // Call OpenRouter API
+    // Create a new Headers object to ensure explicit control
+    const headers = new Headers();
+    headers.append("Authorization", `Bearer ${openRouterApiKey}`);
+    headers.append("Content-Type", "application/json");
+    headers.append("HTTP-Referer", "https://your-app-domain.com"); // Replace with your domain
+    headers.append("X-Title", "AI Workspace Chat");
+
     const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://your-app-domain.com", // Replace with your domain
-        "X-Title": "AI Workspace Chat"
-      },
+      headers: headers, // Use the new Headers object
       body: JSON.stringify({
         model: modelData.api_identifier,
         messages: [
