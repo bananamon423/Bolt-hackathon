@@ -245,7 +245,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const sendAIMessage = async (content: string, modelId: string, modelName?: string) => {
     if (!chatId || !content.trim()) return;
 
-    console.log('🤖 Sending AI message:', content, 'Model:', modelName);
+    console.log('🤖 Sending AI message:', content, 'Model:', modelName, 'ModelId:', modelId);
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -253,12 +253,13 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      // *** NEW ROUTING LOGIC ***
+      // *** CRITICAL ROUTING LOGIC ***
       let functionToInvoke = '';
       let functionPayload = {};
 
-      if (modelName === 'Gwiz' || modelName === 'Gwiz (Legacy)') {
-        // If the user mentions @Gwiz, use the legacy ai-chat function
+      // Check if the mentioned model is exactly 'Gwiz'
+      if (modelName === 'Gwiz') {
+        // Route to ai-chat function for Gwiz
         console.log('🔄 Routing to ai-chat function for Gwiz...');
         functionToInvoke = 'ai-chat';
         functionPayload = {
@@ -276,9 +277,9 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           modelId,
         };
       }
-      // *** END OF NEW ROUTING LOGIC ***
+      // *** END OF ROUTING LOGIC ***
 
-      console.log(`🔄 Calling ${functionToInvoke} function...`);
+      console.log(`🔄 Calling ${functionToInvoke} function with payload:`, functionPayload);
 
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/${functionToInvoke}`, {
         method: 'POST',
@@ -294,11 +295,11 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       console.log(`🤖 ${functionToInvoke} function response:`, result);
       
       if (!response.ok) {
-        console.error(`❌ ${functionToInvoke} function error:`, result);
-        throw new Error(result.error || 'AI request failed');
+        console.error(`❌ Error invoking ${functionToInvoke} function:`, result);
+        throw new Error(result.error || `${functionToInvoke} request failed`);
       }
 
-      console.log('✅ AI message request completed');
+      console.log(`✅ ${functionToInvoke} request completed successfully`);
       
       // The AI response should be automatically added via real-time subscription
       // If it doesn't appear within 5 seconds, refresh messages
