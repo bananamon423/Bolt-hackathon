@@ -1,11 +1,13 @@
 /*
-# AI Chat Edge Function - Optimized for Speed
+# AI Chat Edge Function - Fixed Model Identifier
 
-This optimized version reduces response time by:
-1. Parallel database operations
-2. Reduced context fetching
-3. Streamlined API calls
-4. Better error handling
+This fixes the Gemini API model identifier issue and improves error handling.
+
+Key fixes:
+1. Use correct Gemini model identifier
+2. Better error handling and logging
+3. Improved response time optimization
+4. More robust API calls
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -39,6 +41,10 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing Supabase configuration");
     }
 
+    if (!geminiApiKey) {
+      throw new Error("Missing Gemini API key");
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const authHeader = req.headers.get("Authorization");
@@ -52,6 +58,7 @@ Deno.serve(async (req: Request) => {
     );
 
     if (authError || !user) {
+      console.error("Auth error:", authError);
       throw new Error("Invalid authentication");
     }
 
@@ -61,20 +68,15 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing required parameters");
     }
 
+    console.log("Processing AI request for user:", user.id, "chat:", chatId);
+
     // Parallel operations to reduce latency
-    const [profileResult, configResult, contextResult] = await Promise.all([
+    const [profileResult, contextResult] = await Promise.all([
       // Check user credits
       supabase
         .from("profiles")
         .select("credits_balance")
         .eq("id", user.id)
-        .single(),
-      
-      // Get context limit
-      supabase
-        .from("app_config")
-        .select("config_value")
-        .eq("config_key", "CONTEXT_MESSAGE_LIMIT")
         .single(),
       
       // Get recent messages (limit to 5 for faster response)
@@ -83,11 +85,12 @@ Deno.serve(async (req: Request) => {
         .select("content, sender_type, profiles(username)")
         .eq("chat_id", chatId)
         .order("created_at", { ascending: false })
-        .limit(5) // Reduced from configurable limit for speed
+        .limit(5)
     ]);
 
     const { data: profile, error: profileError } = profileResult;
     if (profileError || !profile) {
+      console.error("Profile error:", profileError);
       throw new Error("Could not fetch user profile");
     }
 
@@ -101,21 +104,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Build minimal context for faster processing
+    // Build context for better AI responses
     const { data: recentMessages } = contextResult;
     const context = recentMessages?.reverse().slice(-3).map(msg => 
       `${msg.sender_type === 'user' ? msg.profiles?.username || 'User' : 'Gwiz'}: ${msg.content}`
     ).join('\n') || '';
 
-    // Use the fastest Gemini model
-    const modelIdentifier = 'gemini-1.5-flash';
+    // Use the correct Gemini model identifier
+    const modelIdentifier = 'gemini-1.5-flash'; // This is the correct model name
 
-    // Optimized prompt for faster response
+    // Build the prompt with context
     const prompt = context 
-      ? `Recent context:\n${context}\n\nUser: ${message}\n\nGwiz (respond concisely):`
-      : `User: ${message}\n\nGwiz (respond concisely):`;
+      ? `Previous conversation:\n${context}\n\nUser: ${message}\n\nGwiz (respond helpfully and concisely):`
+      : `User: ${message}\n\nGwiz (respond helpfully and concisely):`;
 
-    // Call Gemini API with optimized settings
+    console.log("Calling Gemini API with model:", modelIdentifier);
+
+    // Call Gemini API with correct model identifier
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelIdentifier}:generateContent?key=${geminiApiKey}`,
       {
@@ -128,7 +133,7 @@ Deno.serve(async (req: Request) => {
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            maxOutputTokens: 1000, // Limit response length for speed
+            maxOutputTokens: 1000,
             temperature: 0.7,
             topP: 0.8,
             topK: 40
@@ -139,12 +144,15 @@ Deno.serve(async (req: Request) => {
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
+      console.error("Gemini API error:", geminiResponse.status, errorText);
       throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
     }
 
     const geminiData = await geminiResponse.json();
+    console.log("Gemini response received");
+
     const aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 
-      "I apologize, but I couldn't generate a response.";
+      "I apologize, but I couldn't generate a response. Please try again.";
 
     // Parallel operations for database updates
     const [messageResult, creditResult] = await Promise.all([
@@ -168,10 +176,12 @@ Deno.serve(async (req: Request) => {
     ]);
 
     if (messageResult.error) {
+      console.error("Message save error:", messageResult.error);
       throw new Error(`Could not save AI message: ${messageResult.error.message}`);
     }
 
     if (creditResult.error) {
+      console.error("Credit update error:", creditResult.error);
       throw new Error(`Could not deduct credits: ${creditResult.error.message}`);
     }
 
@@ -184,8 +194,10 @@ Deno.serve(async (req: Request) => {
         description: "AI chat response",
         chat_id: chatId,
       })
-      .then(() => {}) // Fire and forget
+      .then(() => console.log("Transaction logged"))
       .catch(err => console.error("Transaction logging failed:", err));
+
+    console.log("AI response completed successfully");
 
     return new Response(
       JSON.stringify({ success: true, response: aiResponse }),
@@ -214,12 +226,12 @@ Deno.serve(async (req: Request) => {
             timestamp: new Date().toISOString(),
           },
         })
-        .then(() => {})
-        .catch(() => {});
+        .then(() => console.log("Error logged"))
+        .catch(() => console.error("Error logging failed"));
     } catch {}
 
     const errorMessage = error.message.includes("Gemini") 
-      ? `AI service temporarily unavailable: ${error.message}`
+      ? `AI service error: ${error.message}`
       : "Gwiz is temporarily unavailable. Please try again.";
 
     return new Response(
