@@ -28,6 +28,8 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           filter: `chat_id=eq.${chatId}`
         },
         async (payload) => {
+          console.log('New message received:', payload.new);
+          
           // Fetch the complete message with profile data
           const { data: fullMessage, error } = await supabase
             .from('messages')
@@ -43,20 +45,26 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
             .single();
 
           if (!error && fullMessage) {
+            console.log('Full message data:', fullMessage);
+            
             setMessages((currentMessages) => {
               // Check if message already exists (avoid duplicates)
               const existingIndex = currentMessages.findIndex(m => m.id === fullMessage.id);
               if (existingIndex >= 0) {
+                console.log('Replacing existing message');
                 // Replace existing message with complete data
                 const updatedMessages = [...currentMessages];
                 updatedMessages[existingIndex] = fullMessage;
                 return updatedMessages;
               } else {
+                console.log('Adding new message to list');
                 // Add new message in correct chronological order
                 const newMessages = [...currentMessages, fullMessage];
                 return newMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
               }
             });
+          } else {
+            console.error('Error fetching full message:', error);
           }
         }
       )
@@ -71,6 +79,8 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     if (!chatId) return;
     setLoading(true);
     try {
+      console.log('Fetching messages for chat:', chatId);
+      
       const { data, error } = await supabase
         .from('messages')
         .select(`
@@ -85,6 +95,8 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         .order('created_at', { ascending: true });
 
       if (error) throw error;
+      
+      console.log('Fetched messages:', data?.length || 0);
       setMessages(data || []);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -95,6 +107,8 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
   const sendMessage = async (content: string, userId: string) => {
     if (!chatId || !content.trim() || !currentUser) return null;
+
+    console.log('Sending message:', content);
 
     // Create optimistic message with a unique temporary ID
     const tempId = `temp_${Date.now()}_${Math.random()}`;
@@ -139,6 +153,8 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw error;
       }
 
+      console.log('Message sent successfully:', insertedMessage);
+
       // Replace optimistic message with real message
       if (insertedMessage) {
         setMessages(currentMessages => 
@@ -162,11 +178,15 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const sendAIMessage = async (content: string, modelId: string) => {
     if (!chatId || !content.trim()) return;
 
+    console.log('Sending AI message:', content);
+
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session?.access_token) {
         throw new Error('No auth token');
       }
+
+      console.log('Calling AI function...');
 
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
         method: 'POST',
@@ -183,10 +203,14 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       const result = await response.json();
       
+      console.log('AI function response:', result);
+      
       if (!response.ok) {
+        console.error('AI function error:', result);
         throw new Error(result.error || 'AI request failed');
       }
 
+      console.log('AI message sent successfully');
       return result;
     } catch (error) {
       console.error('Error sending AI message:', error);
