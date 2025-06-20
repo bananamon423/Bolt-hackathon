@@ -43,8 +43,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     // Create subscription with a unique channel name
     const channel = supabase.channel(`messages_${chatId}_${Date.now()}`, {
       config: {
-        broadcast: { self: true },
-        presence: { key: 'user' }
+        broadcast: { self: true }
       }
     });
 
