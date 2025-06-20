@@ -40,14 +40,14 @@ export function useMentions({
   const getAllMentionOptions = (): MentionOption[] => {
     const options: MentionOption[] = [];
 
-    // Add Gwiz as the first option (legacy support)
+    // *** CRITICAL: Add Gwiz as the FIRST option ***
     if (creditsBalance > 0) {
       options.push({
-        id: 'gwiz-legacy',
+        id: 'gwiz-hardcoded',
         type: 'ai',
         name: 'Gwiz',
         displayName: 'Gwiz',
-        description: 'Original AI Assistant • 1 credit',
+        description: 'Original AI Assistant (Gemini) • 1 credit',
         icon: '🤖',
         color: 'from-purple-500 to-pink-500',
         cost: 1
@@ -231,9 +231,12 @@ export function useMentions({
 
     if (mentionMatch) {
       const beforeMention = beforeCursor.substring(0, mentionMatch.index);
+      
+      // *** CRITICAL: Use the exact name for Gwiz ***
       const mentionText = option.type === 'ai' 
-        ? `@${option.displayName} ` 
+        ? `@${option.name} `  // Use option.name (which is 'Gwiz' for our hardcoded option)
         : `@${option.name} `;
+      
       const newText = beforeMention + mentionText + afterCursor;
       const newCursorPosition = beforeMention.length + mentionText.length;
 
@@ -246,7 +249,7 @@ export function useMentions({
         isAIMention: option.type === 'ai',
         selectedModel: option.type === 'ai' ? {
           id: option.id,
-          name: option.displayName,
+          name: option.name, // This will be 'Gwiz' for our hardcoded option
           apiIdentifier: option.modelId || option.name,
           cost: option.cost || 1
         } : null

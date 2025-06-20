@@ -259,7 +259,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       // Check if the mentioned model is exactly 'Gwiz'
       if (modelName === 'Gwiz') {
-        // Route to ai-chat function for Gwiz
+        // Route to ai-chat function for Gwiz (uses hardcoded VITE_GEMINI_API_KEY)
         console.log('🔄 Routing to ai-chat function for Gwiz...');
         functionToInvoke = 'ai-chat';
         functionPayload = {
