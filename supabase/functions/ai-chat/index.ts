@@ -1,7 +1,7 @@
 /*
-# AI Chat Edge Function - Enhanced with Better Error Handling
+# AI Chat Edge Function - Fixed Gemini API Format
 
-This version includes comprehensive logging and specific error messages to help debug issues.
+This version uses the proper conversational format with roles that the Gemini API expects.
 Uses the VITE_GEMINI_API_KEY environment variable for Gemini API access.
 */
 
@@ -98,24 +98,33 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get recent messages for context
-    const { data: recentMessages } = await supabase
+    const { data: recentMessages, error: messagesError } = await supabase
       .from("messages")
-      .select("content, sender_type, profiles(username)")
+      .select("content, sender_type")
       .eq("chat_id", chatId)
-      .order("created_at", { ascending: false })
-      .limit(5);
+      .order("created_at", { ascending: true }) // Ascending to build history correctly
+      .limit(10); // Get a bit more history
 
-    const context = recentMessages?.reverse().slice(-3).map(msg => 
-      `${msg.sender_type === 'user' ? msg.profiles?.username || 'User' : 'Gwiz'}: ${msg.content}`
-    ).join('\n') || '';
+    if (messagesError) {
+      throw new Error("Failed to fetch chat history.");
+    }
+
+    // Build the conversational history for the Gemini API
+    const contents = recentMessages.map(msg => ({
+      role: msg.sender_type === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }],
+    }));
+
+    // Add the current user's message to the conversation
+    contents.push({
+      role: 'user',
+      parts: [{ text: message }],
+    });
 
     const modelIdentifier = 'gemini-1.5-flash';
-    const prompt = context 
-      ? `Previous conversation:\n${context}\n\nUser: ${message}\n\nGwiz (respond helpfully and concisely):`
-      : `User: ${message}\n\nGwiz (respond helpfully and concisely):`;
 
-    console.log("🤖 Calling Gemini API with VITE_GEMINI_API_KEY...");
-    console.log("📝 Prompt length:", prompt.length);
+    console.log("🤖 Calling Gemini API with structured conversational contents...");
+    console.log("📝 Contents structure:", JSON.stringify(contents, null, 2));
 
     // Call Gemini API using the environment variable
     try {
@@ -127,9 +136,7 @@ Deno.serve(async (req: Request) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }],
+            contents: contents, // Use the new structured contents array
             generationConfig: {
               maxOutputTokens: 1000,
               temperature: 0.7,
