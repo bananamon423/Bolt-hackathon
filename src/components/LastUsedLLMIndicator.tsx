@@ -40,13 +40,19 @@ export function LastUsedLLMIndicator({ className = '' }: LastUsedLLMIndicatorPro
       const { data, error } = await supabase
         .from('app_config')
         .select('config_value')
-        .eq('config_key', 'LAST_USED_LLM')
-        .single();
+        .eq('config_key', 'LAST_USED_LLM');
 
       if (error) throw error;
-      setLastUsedModel(data.config_value);
+      
+      // Handle the case where no configuration exists
+      if (!data || data.length === 0) {
+        setLastUsedModel(null);
+      } else {
+        setLastUsedModel(data[0].config_value);
+      }
     } catch (error) {
       console.error('Error fetching last used model:', error);
+      setLastUsedModel(null);
     } finally {
       setLoading(false);
     }
