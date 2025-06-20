@@ -147,6 +147,7 @@ function MainApp() {
               onSendMessage={handleSendMessage}
               onSendAIMessage={handleSendAIMessage}
               creditsBalance={profile.credits_balance}
+              onlineUsers={onlineUsers}
             />
           </>
         ) : (

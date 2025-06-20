@@ -1,26 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, Bot, AlertCircle } from 'lucide-react';
+import { MentionDropdown } from './MentionDropdown';
+import { useMentions } from '../hooks/useMentions';
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
   onSendAIMessage: (content: string) => Promise<void>;
   disabled?: boolean;
   creditsBalance: number;
+  onlineUsers?: string[];
 }
 
 export function MessageInput({ 
   onSendMessage, 
   onSendAIMessage, 
   disabled = false,
-  creditsBalance 
+  creditsBalance,
+  onlineUsers = []
 }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showCreditsWarning, setShowCreditsWarning] = useState(false);
-  const [isAIMode, setIsAIMode] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState(0);
 
-  // Check if message is for AI (starts with @Gwiz or AI mode is active)
-  const isAIMessage = message.startsWith('@Gwiz ') || isAIMode;
+  const {
+    showDropdown,
+    mentionOptions,
+    selectedIndex,
+    dropdownPosition,
+    textareaRef,
+    handleTextChange,
+    handleKeyDown,
+    handleMentionSelect
+  } = useMentions({ onlineUsers, creditsBalance });
+
+  // Check if message is for AI (starts with @Gwiz)
+  const isAIMessage = message.startsWith('@Gwiz ');
+
+  useEffect(() => {
+    // Update cursor position when message changes
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      setCursorPosition(textarea.selectionStart || 0);
+    }
+  }, [message]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const newCursorPosition = e.target.selectionStart || 0;
+    
+    setMessage(newValue);
+    setCursorPosition(newCursorPosition);
+    handleTextChange(newValue, newCursorPosition);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const textarea = e.target as HTMLTextAreaElement;
+    const currentCursorPosition = textarea.selectionStart || 0;
+    
+    // Handle mention dropdown navigation
+    const mentionHandled = handleKeyDown(e, message, currentCursorPosition);
+    if (mentionHandled) return;
+
+    // Handle regular Enter key for sending message
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleMentionClick = (option: any) => {
+    const result = handleMentionSelect(option, message, cursorPosition);
+    if (result) {
+      setMessage(result.newText);
+      
+      // Set cursor position after the mention
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.setSelectionRange(result.newCursorPosition, result.newCursorPosition);
+          textareaRef.current.focus();
+        }
+      }, 0);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +90,6 @@ export function MessageInput({
 
     const trimmedMessage = message.trim();
     setMessage('');
-    setIsAIMode(false); // Reset AI mode after sending
 
     // Check if message starts with @Gwiz
     if (trimmedMessage.startsWith('@Gwiz ')) {
@@ -62,36 +123,6 @@ export function MessageInput({
       } finally {
         setIsLoading(false);
       }
-    } else if (isAIMessage) {
-      // AI mode was active
-      if (creditsBalance < 1) {
-        setShowCreditsWarning(true);
-        setTimeout(() => setShowCreditsWarning(false), 3000);
-        setMessage(trimmedMessage); // Restore message
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        // First send the user message
-        onSendMessage(trimmedMessage);
-        // Then send to AI with timeout
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
-        );
-        
-        await Promise.race([
-          onSendAIMessage(trimmedMessage),
-          timeoutPromise
-        ]);
-      } catch (error) {
-        console.error('AI message failed:', error);
-        if (error.message.includes('timeout')) {
-          alert('AI response is taking longer than expected. Please try again.');
-        }
-      } finally {
-        setIsLoading(false);
-      }
     } else {
       onSendMessage(trimmedMessage);
     }
@@ -99,9 +130,15 @@ export function MessageInput({
 
   const handleGwizClick = async () => {
     if (!message.trim() || disabled || isLoading) {
-      // If no message, just toggle AI mode
+      // If no message, insert @Gwiz mention
       if (!message.trim()) {
-        setIsAIMode(!isAIMode);
+        setMessage('@Gwiz ');
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.setSelectionRange(6, 6); // Position cursor after "@Gwiz "
+          }
+        }, 0);
         return;
       }
       return;
@@ -115,7 +152,6 @@ export function MessageInput({
 
     const userMessage = message.trim();
     setMessage(''); // Clear input immediately
-    setIsAIMode(false); // Reset AI mode
     setIsLoading(true);
     
     try {
@@ -141,7 +177,7 @@ export function MessageInput({
   };
 
   return (
-    <div className="border-t border-gray-200 p-4">
+    <div className="border-t border-gray-200 p-4 relative">
       {showCreditsWarning && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-red-500" />
@@ -151,15 +187,30 @@ export function MessageInput({
         </div>
       )}
       
+      {/* Mention Dropdown */}
+      <MentionDropdown
+        options={mentionOptions}
+        selectedIndex={selectedIndex}
+        onSelect={handleMentionClick}
+        position={dropdownPosition}
+        visible={showDropdown}
+      />
+      
       <form onSubmit={handleSubmit} className="flex gap-3">
         <div className="flex-1 relative">
           <textarea
+            ref={textareaRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={handleInputChange}
+            onKeyDown={handleInputKeyDown}
+            onSelect={(e) => {
+              const textarea = e.target as HTMLTextAreaElement;
+              setCursorPosition(textarea.selectionStart || 0);
+            }}
             placeholder={
               isAIMessage 
                 ? "Ask Gwiz anything..." 
-                : "Type your message... (Use @Gwiz to ask the AI)"
+                : "Type your message... (Use @ to mention)"
             }
             className={`w-full resize-none rounded-lg px-4 py-3 focus:ring-2 focus:border-transparent transition-all duration-200 ${
               isAIMessage
@@ -168,12 +219,6 @@ export function MessageInput({
             }`}
             rows={1}
             disabled={disabled || isLoading}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
             style={{
               minHeight: '44px',
               maxHeight: '120px',
@@ -201,7 +246,7 @@ export function MessageInput({
             onClick={handleGwizClick}
             disabled={disabled || isLoading || (message.trim() && creditsBalance < 1)}
             className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 ${
-              isAIMode || isAIMessage
+              isAIMessage
                 ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 focus:ring-green-500'
                 : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 focus:ring-purple-500'
             }`}
@@ -234,7 +279,7 @@ export function MessageInput({
         <span>
           {isAIMessage 
             ? "🤖 AI Mode Active - Press Enter to ask Gwiz" 
-            : "Press Enter to send, Shift+Enter for new line"
+            : "Press Enter to send, Shift+Enter for new line, @ to mention"
           }
         </span>
         <span>{creditsBalance} credits remaining</span>
