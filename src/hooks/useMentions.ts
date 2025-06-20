@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, RefObject } from 'react';
 
 interface MentionOption {
   id: string;
@@ -11,15 +11,14 @@ interface MentionOption {
 interface UseMentionsProps {
   onlineUsers?: string[];
   creditsBalance: number;
+  textareaRef: RefObject<HTMLTextAreaElement>;
 }
 
-export function useMentions({ onlineUsers = [], creditsBalance }: UseMentionsProps) {
+export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: UseMentionsProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [mentionQuery, setMentionQuery] = useState('');
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Define available mention options
   const getAllMentionOptions = (): MentionOption[] => {
@@ -78,46 +77,61 @@ export function useMentions({ onlineUsers = [], creditsBalance }: UseMentionsPro
     );
   };
 
+  const calculateDropdownPosition = (textarea: HTMLTextAreaElement, cursorPosition: number, text: string) => {
+    const rect = textarea.getBoundingClientRect();
+    const style = window.getComputedStyle(textarea);
+    const fontSize = parseInt(style.fontSize);
+    const lineHeight = parseInt(style.lineHeight) || fontSize * 1.2;
+    
+    // Create a temporary div to measure text
+    const tempDiv = document.createElement('div');
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.visibility = 'hidden';
+    tempDiv.style.whiteSpace = 'pre-wrap';
+    tempDiv.style.font = style.font;
+    tempDiv.style.width = style.width;
+    tempDiv.style.padding = style.padding;
+    tempDiv.style.border = style.border;
+    tempDiv.style.boxSizing = style.boxSizing;
+    
+    document.body.appendChild(tempDiv);
+    
+    const textBeforeCursor = text.substring(0, cursorPosition);
+    tempDiv.textContent = textBeforeCursor;
+    
+    const tempRect = tempDiv.getBoundingClientRect();
+    document.body.removeChild(tempDiv);
+    
+    // Calculate position
+    const top = rect.top - 200; // Position above the textarea
+    const left = Math.min(rect.left + (tempRect.width % rect.width), window.innerWidth - 250);
+    
+    return { top, left };
+  };
+
   const handleTextChange = (text: string, cursorPosition: number) => {
     const beforeCursor = text.substring(0, cursorPosition);
     const mentionMatch = beforeCursor.match(/@(\w*)$/);
 
-    if (mentionMatch) {
+    if (mentionMatch && textareaRef.current) {
       const query = mentionMatch[1];
       const filteredOptions = filterOptions(query);
       
-      setMentionQuery(query);
       setMentionOptions(filteredOptions);
       setSelectedIndex(0);
       setShowDropdown(true);
 
       // Calculate dropdown position
-      if (textareaRef.current) {
-        const textarea = textareaRef.current;
-        const rect = textarea.getBoundingClientRect();
-        const textBeforeMention = beforeCursor.substring(0, mentionMatch.index);
-        
-        // Approximate position calculation
-        const lineHeight = 20;
-        const charWidth = 8;
-        const lines = textBeforeMention.split('\n');
-        const currentLine = lines.length - 1;
-        const currentLineLength = lines[lines.length - 1].length;
-        
-        setDropdownPosition({
-          top: rect.top - 200 + (currentLine * lineHeight),
-          left: rect.left + (currentLineLength * charWidth)
-        });
-      }
+      const position = calculateDropdownPosition(textareaRef.current, cursorPosition, text);
+      setDropdownPosition(position);
     } else {
       setShowDropdown(false);
-      setMentionQuery('');
       setMentionOptions([]);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, currentText: string, cursorPosition: number) => {
-    if (!showDropdown) return false;
+    if (!showDropdown || mentionOptions.length === 0) return false;
 
     switch (e.key) {
       case 'ArrowDown':
@@ -135,7 +149,7 @@ export function useMentions({ onlineUsers = [], creditsBalance }: UseMentionsPro
         e.preventDefault();
         if (mentionOptions[selectedIndex]) {
           const selectedOption = mentionOptions[selectedIndex];
-          return handleMentionSelect(selectedOption, currentText, cursorPosition);
+          handleMentionSelect(selectedOption, currentText, cursorPosition);
         }
         return true;
       
@@ -155,12 +169,11 @@ export function useMentions({ onlineUsers = [], creditsBalance }: UseMentionsPro
 
     if (mentionMatch) {
       const beforeMention = beforeCursor.substring(0, mentionMatch.index);
-      const mentionText = option.type === 'ai' ? `@${option.name} ` : `@${option.name} `;
+      const mentionText = `@${option.name} `;
       const newText = beforeMention + mentionText + afterCursor;
       const newCursorPosition = beforeMention.length + mentionText.length;
 
       setShowDropdown(false);
-      setMentionQuery('');
       setMentionOptions([]);
 
       return {
@@ -178,7 +191,6 @@ export function useMentions({ onlineUsers = [], creditsBalance }: UseMentionsPro
     mentionOptions,
     selectedIndex,
     dropdownPosition,
-    textareaRef,
     handleTextChange,
     handleKeyDown,
     handleMentionSelect

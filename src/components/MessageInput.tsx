@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, AlertCircle } from 'lucide-react';
 import { MentionDropdown } from './MentionDropdown';
 import { useMentions } from '../hooks/useMentions';
@@ -21,36 +21,26 @@ export function MessageInput({
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showCreditsWarning, setShowCreditsWarning] = useState(false);
-  const [cursorPosition, setCursorPosition] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
     showDropdown,
     mentionOptions,
     selectedIndex,
     dropdownPosition,
-    textareaRef,
     handleTextChange,
     handleKeyDown,
     handleMentionSelect
-  } = useMentions({ onlineUsers, creditsBalance });
+  } = useMentions({ onlineUsers, creditsBalance, textareaRef });
 
   // Check if message is for AI (starts with @Gwiz)
   const isAIMessage = message.startsWith('@Gwiz ');
-
-  useEffect(() => {
-    // Update cursor position when message changes
-    if (textareaRef.current) {
-      const textarea = textareaRef.current;
-      setCursorPosition(textarea.selectionStart || 0);
-    }
-  }, [message]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     const newCursorPosition = e.target.selectionStart || 0;
     
     setMessage(newValue);
-    setCursorPosition(newCursorPosition);
     handleTextChange(newValue, newCursorPosition);
   };
 
@@ -70,7 +60,12 @@ export function MessageInput({
   };
 
   const handleMentionClick = (option: any) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const cursorPosition = textarea.selectionStart || 0;
     const result = handleMentionSelect(option, message, cursorPosition);
+    
     if (result) {
       setMessage(result.newText);
       
@@ -203,10 +198,6 @@ export function MessageInput({
             value={message}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}
-            onSelect={(e) => {
-              const textarea = e.target as HTMLTextAreaElement;
-              setCursorPosition(textarea.selectionStart || 0);
-            }}
             placeholder={
               isAIMessage 
                 ? "Ask Gwiz anything..." 
