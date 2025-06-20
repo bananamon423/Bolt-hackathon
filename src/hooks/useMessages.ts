@@ -242,10 +242,10 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     }
   };
 
-  const sendAIMessage = async (content: string, modelId: string) => {
+  const sendAIMessage = async (content: string, modelId: string, modelName?: string) => {
     if (!chatId || !content.trim()) return;
 
-    console.log('🤖 Sending AI message:', content);
+    console.log('🤖 Sending AI message:', content, 'Model:', modelName);
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -253,28 +253,48 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      console.log('🔄 Calling OpenRouter function...');
+      // *** NEW ROUTING LOGIC ***
+      let functionToInvoke = '';
+      let functionPayload = {};
 
-      // Use the new OpenRouter function
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/openrouter-chat`, {
+      if (modelName === 'Gwiz' || modelName === 'Gwiz (Legacy)') {
+        // If the user mentions @Gwiz, use the legacy ai-chat function
+        console.log('🔄 Routing to ai-chat function for Gwiz...');
+        functionToInvoke = 'ai-chat';
+        functionPayload = {
+          chatId,
+          message: content,
+          modelId,
+        };
+      } else {
+        // For all other models, use the OpenRouter function
+        console.log('🔄 Routing to openrouter-chat function for:', modelName);
+        functionToInvoke = 'openrouter-chat';
+        functionPayload = {
+          chatId,
+          message: content,
+          modelId,
+        };
+      }
+      // *** END OF NEW ROUTING LOGIC ***
+
+      console.log(`🔄 Calling ${functionToInvoke} function...`);
+
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/${functionToInvoke}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          chatId,
-          message: content,
-          modelId,
-        }),
+        body: JSON.stringify(functionPayload),
       });
 
       const result = await response.json();
       
-      console.log('🤖 OpenRouter function response:', result);
+      console.log(`🤖 ${functionToInvoke} function response:`, result);
       
       if (!response.ok) {
-        console.error('❌ OpenRouter function error:', result);
+        console.error(`❌ ${functionToInvoke} function error:`, result);
         throw new Error(result.error || 'AI request failed');
       }
 
