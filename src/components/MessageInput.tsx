@@ -47,8 +47,19 @@ export function MessageInput({
     availableModels 
   });
 
-  // Check if message is for AI (contains @AI_MODEL_NAME)
+  // Enhanced AI mention detection
   const getAIMentionFromMessage = (text: string) => {
+    // Check for @Gwiz first (case-insensitive)
+    if (text.toLowerCase().includes('@gwiz')) {
+      return {
+        id: 'gwiz-hardcoded',
+        name: 'Gwiz',
+        apiIdentifier: 'google/gemini-1.5-flash',
+        cost: 1
+      };
+    }
+
+    // Check for other AI models from database
     const aiModels = availableModels.map(model => model.model_name);
     for (const modelName of aiModels) {
       if (text.includes(`@${modelName}`)) {
@@ -60,16 +71,6 @@ export function MessageInput({
           cost: model.cost_per_token
         } : null;
       }
-    }
-    
-    // Check for legacy @Gwiz
-    if (text.includes('@Gwiz')) {
-      return {
-        id: 'legacy-gwiz',
-        name: 'Gwiz',
-        apiIdentifier: 'google/gemini-2.0-flash-exp',
-        cost: 1
-      };
     }
     
     return null;
@@ -153,7 +154,12 @@ export function MessageInput({
       setIsLoading(true);
       try {
         // Extract the actual message content (remove the @mention)
-        const aiMessage = trimmedMessage.replace(`@${currentAIMention.name}`, '').trim();
+        let aiMessage = trimmedMessage;
+        if (currentAIMention.name === 'Gwiz') {
+          aiMessage = trimmedMessage.replace(/@gwiz/gi, '').trim();
+        } else {
+          aiMessage = trimmedMessage.replace(`@${currentAIMention.name}`, '').trim();
+        }
         
         // First send the user message with the mention
         onSendMessage(trimmedMessage);
@@ -162,6 +168,12 @@ export function MessageInput({
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Request timeout')), 30000)
         );
+        
+        console.log('🚀 Sending to AI:', {
+          message: aiMessage,
+          modelId: currentAIMention.id,
+          modelName: currentAIMention.name
+        });
         
         await Promise.race([
           onSendAIMessage(aiMessage, currentAIMention.id, currentAIMention.name),

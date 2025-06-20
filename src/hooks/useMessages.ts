@@ -253,14 +253,19 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      // *** CRITICAL ROUTING LOGIC ***
+      // *** ENHANCED ROUTING LOGIC ***
       let functionToInvoke = '';
       let functionPayload = {};
 
-      // Check if the mentioned model is exactly 'Gwiz'
-      if (modelName === 'Gwiz') {
+      // Check if the mentioned model is exactly 'Gwiz' (case-insensitive and flexible)
+      const isGwizModel = modelName === 'Gwiz' || 
+                         modelName === 'gwiz' || 
+                         modelId === 'gwiz-hardcoded' ||
+                         content.toLowerCase().includes('@gwiz');
+
+      if (isGwizModel) {
         // Route to ai-chat function for Gwiz (uses hardcoded VITE_GEMINI_API_KEY)
-        console.log('🔄 Routing to ai-chat function for Gwiz...');
+        console.log('🔄 ✅ ROUTING TO AI-CHAT FUNCTION FOR GWIZ');
         functionToInvoke = 'ai-chat';
         functionPayload = {
           chatId,
@@ -277,7 +282,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           modelId,
         };
       }
-      // *** END OF ROUTING LOGIC ***
+      // *** END OF ENHANCED ROUTING LOGIC ***
 
       console.log(`🔄 Calling ${functionToInvoke} function with payload:`, functionPayload);
 
