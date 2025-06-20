@@ -41,8 +41,11 @@ function MainApp() {
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
 
-  // Combine Gwiz with other models for all components
-  const allModels = [GWIZ_MODEL, ...models];
+  // Combine Gwiz with other models for all components - FILTER OUT any duplicate Gwiz
+  const allModels = [
+    GWIZ_MODEL, 
+    ...models.filter(model => model.id !== 'gwiz-hardcoded' && model.model_name !== 'Gwiz')
+  ];
 
   // Set default model (Gwiz first)
   useEffect(() => {

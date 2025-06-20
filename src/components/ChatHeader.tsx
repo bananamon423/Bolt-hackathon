@@ -12,15 +12,6 @@ interface ChatHeaderProps {
   onlineUsers: string[];
 }
 
-// Define Gwiz as a special hardcoded model
-const GWIZ_MODEL: LLMModel = {
-  id: 'gwiz-hardcoded',
-  model_name: 'Gwiz',
-  api_identifier: 'google/gemini-1.5-flash',
-  cost_per_token: 1,
-  is_active: true
-};
-
 export function ChatHeader({ 
   chat, 
   models, 
@@ -34,9 +25,6 @@ export function ChatHeader({
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-
-  // Combine Gwiz with other models, putting Gwiz first
-  const allModels = [GWIZ_MODEL, ...models];
 
   const handleSaveTitle = () => {
     if (title.trim() && title !== chat?.chat_title) {
@@ -167,7 +155,7 @@ export function ChatHeader({
                   <div className="text-xs font-medium text-gray-500 mb-2 px-2">
                     Available AI Models:
                   </div>
-                  {allModels.map((model) => (
+                  {models.map((model) => (
                     <button
                       key={model.id}
                       onClick={() => handleModelSelect(model)}

@@ -54,8 +54,13 @@ export function useMentions({
       });
     }
 
-    // Add AI models from database (OpenRouter models)
+    // Add AI models from database (OpenRouter models) - EXCLUDE Gwiz to prevent duplicates
     availableModels.forEach(model => {
+      // Skip if this is the Gwiz model to prevent duplicates
+      if (model.id === 'gwiz-hardcoded' || model.model_name === 'Gwiz') {
+        return;
+      }
+
       const modelConfig = OPENROUTER_MODELS[model.api_identifier as OpenRouterModelId];
       if (modelConfig && creditsBalance >= model.cost_per_token) {
         options.push({
