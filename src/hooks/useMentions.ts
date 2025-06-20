@@ -40,6 +40,20 @@ export function useMentions({
   const getAllMentionOptions = (): MentionOption[] => {
     const options: MentionOption[] = [];
 
+    // Add Gwiz as the first option (legacy support)
+    if (creditsBalance > 0) {
+      options.push({
+        id: 'gwiz-legacy',
+        type: 'ai',
+        name: 'Gwiz',
+        displayName: 'Gwiz',
+        description: 'Original AI Assistant • 1 credit',
+        icon: '🤖',
+        color: 'from-purple-500 to-pink-500',
+        cost: 1
+      });
+    }
+
     // Add AI models from database (OpenRouter models)
     availableModels.forEach(model => {
       const modelConfig = OPENROUTER_MODELS[model.api_identifier as OpenRouterModelId];
@@ -57,20 +71,6 @@ export function useMentions({
         });
       }
     });
-
-    // Add legacy Gwiz option for backward compatibility
-    if (creditsBalance > 0 && !options.some(opt => opt.name.includes('gemini'))) {
-      options.push({
-        id: 'gwiz-legacy',
-        type: 'ai',
-        name: 'Gwiz',
-        displayName: 'Gwiz (Legacy)',
-        description: 'Original AI Assistant • 1 credit',
-        icon: '🤖',
-        color: 'from-purple-500 to-pink-500',
-        cost: 1
-      });
-    }
 
     // Add online users (if any)
     onlineUsers.forEach((userId, index) => {
