@@ -1,24 +1,53 @@
 import React, { useEffect, useRef } from 'react';
-import { Bot, User } from 'lucide-react';
+import { Bot, User, Sparkles, Clock, Zap } from 'lucide-react';
 import { Message } from '../lib/supabase';
+import { OPENROUTER_MODELS, OpenRouterModelId } from '../lib/supabase';
+import { ThinkingIndicator } from './ThinkingIndicator';
 
 interface MessageListProps {
   messages: Message[];
   currentUserId: string;
+  isAIThinking?: boolean;
+  thinkingModelName?: string;
 }
 
-export function MessageList({ messages, currentUserId }: MessageListProps) {
+export function MessageList({ 
+  messages, 
+  currentUserId, 
+  isAIThinking = false,
+  thinkingModelName 
+}: MessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isAIThinking]);
 
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  };
+
+  const getAIModelInfo = (message: Message) => {
+    if (message.llm_model_used) {
+      const modelConfig = OPENROUTER_MODELS[message.llm_model_used as OpenRouterModelId];
+      if (modelConfig) {
+        return {
+          name: modelConfig.name,
+          icon: modelConfig.icon,
+          color: modelConfig.color
+        };
+      }
+    }
+    
+    // Fallback for legacy messages
+    return {
+      name: 'AI Assistant',
+      icon: '🤖',
+      color: 'from-purple-500 to-pink-500'
+    };
   };
 
   return (
@@ -39,6 +68,8 @@ export function MessageList({ messages, currentUserId }: MessageListProps) {
           );
         }
 
+        const aiModelInfo = isAI ? getAIModelInfo(message) : null;
+
         return (
           <div
             key={message.id}
@@ -50,26 +81,33 @@ export function MessageList({ messages, currentUserId }: MessageListProps) {
               }`}
             >
               {/* Avatar */}
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                 isAI 
-                  ? 'bg-gradient-to-br from-purple-500 to-pink-500' 
+                  ? `bg-gradient-to-br ${aiModelInfo?.color || 'from-purple-500 to-pink-500'}` 
                   : isCurrentUser
                   ? 'bg-gradient-to-br from-blue-500 to-teal-500'
                   : 'bg-gradient-to-br from-gray-400 to-gray-600'
               }`}>
                 {isAI ? (
-                  <Bot className="w-4 h-4 text-white" />
+                  <span className="text-lg">{aiModelInfo?.icon || '🤖'}</span>
                 ) : (
-                  <User className="w-4 h-4 text-white" />
+                  <User className="w-5 h-5 text-white" />
                 )}
               </div>
 
               {/* Message Content */}
               <div className={`flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'}`}>
+                {/* Author name for AI messages */}
+                {isAI && aiModelInfo && (
+                  <div className="text-xs font-medium text-gray-600 mb-1 px-1">
+                    {aiModelInfo.name}
+                  </div>
+                )}
+
                 <div
-                  className={`px-4 py-2 rounded-2xl ${
+                  className={`px-4 py-3 rounded-2xl ${
                     isAI
-                      ? 'bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200'
+                      ? `bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200`
                       : isCurrentUser
                       ? 'bg-gradient-to-br from-blue-500 to-teal-500 text-white'
                       : 'bg-gray-100 text-gray-900'
@@ -84,10 +122,31 @@ export function MessageList({ messages, currentUserId }: MessageListProps) {
                 <div className={`flex items-center gap-2 mt-1 text-xs text-gray-500 ${
                   isCurrentUser ? 'flex-row-reverse' : 'flex-row'
                 }`}>
-                  <span>{formatTime(message.created_at)}</span>
-                  {isAI && message.token_cost && (
-                    <span>• {message.token_cost} credit</span>
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    <span>{formatTime(message.created_at)}</span>
+                  </div>
+                  
+                  {isAI && (
+                    <>
+                      {message.cost_in_credits && (
+                        <div className="flex items-center gap-1">
+                          <Zap className="w-3 h-3" />
+                          <span>{message.cost_in_credits} credit{message.cost_in_credits > 1 ? 's' : ''}</span>
+                        </div>
+                      )}
+                      
+                      {(message.input_tokens || message.output_tokens) && (
+                        <div className="flex items-center gap-1">
+                          <span>•</span>
+                          <span>
+                            {message.input_tokens || 0}→{message.output_tokens || 0} tokens
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
+                  
                   {!isCurrentUser && !isAI && message.profiles?.username && (
                     <span>• {message.profiles.username}</span>
                   )}
@@ -97,6 +156,15 @@ export function MessageList({ messages, currentUserId }: MessageListProps) {
           </div>
         );
       })}
+
+      {/* Thinking Indicator */}
+      {isAIThinking && (
+        <ThinkingIndicator 
+          modelName={thinkingModelName}
+          visible={isAIThinking}
+        />
+      )}
+
       <div ref={messagesEndRef} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useRef, RefObject } from 'react';
+import { OPENROUTER_MODELS, OpenRouterModelId } from '../lib/supabase';
 
 interface MentionOption {
   id: string;
@@ -6,15 +7,30 @@ interface MentionOption {
   name: string;
   displayName: string;
   description?: string;
+  modelId?: OpenRouterModelId;
+  icon?: string;
+  color?: string;
+  cost?: number;
 }
 
 interface UseMentionsProps {
   onlineUsers?: string[];
   creditsBalance: number;
   textareaRef: RefObject<HTMLTextAreaElement>;
+  availableModels?: Array<{
+    id: string;
+    model_name: string;
+    api_identifier: string;
+    cost_per_token: number;
+  }>;
 }
 
-export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: UseMentionsProps) {
+export function useMentions({ 
+  onlineUsers = [], 
+  creditsBalance, 
+  textareaRef,
+  availableModels = []
+}: UseMentionsProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -24,14 +40,35 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
   const getAllMentionOptions = (): MentionOption[] => {
     const options: MentionOption[] = [];
 
-    // Add AI bot option (always available if user has credits)
-    if (creditsBalance > 0) {
+    // Add AI models from database (OpenRouter models)
+    availableModels.forEach(model => {
+      const modelConfig = OPENROUTER_MODELS[model.api_identifier as OpenRouterModelId];
+      if (modelConfig && creditsBalance >= model.cost_per_token) {
+        options.push({
+          id: model.id,
+          type: 'ai',
+          name: model.api_identifier,
+          displayName: modelConfig.name,
+          description: `${modelConfig.description} • ${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
+          modelId: model.api_identifier as OpenRouterModelId,
+          icon: modelConfig.icon,
+          color: modelConfig.color,
+          cost: model.cost_per_token
+        });
+      }
+    });
+
+    // Add legacy Gwiz option for backward compatibility
+    if (creditsBalance > 0 && !options.some(opt => opt.name.includes('gemini'))) {
       options.push({
-        id: 'gwiz',
+        id: 'gwiz-legacy',
         type: 'ai',
         name: 'Gwiz',
-        displayName: 'Gwiz',
-        description: 'AI Assistant - Ask me anything!'
+        displayName: 'Gwiz (Legacy)',
+        description: 'Original AI Assistant • 1 credit',
+        icon: '🤖',
+        color: 'from-purple-500 to-pink-500',
+        cost: 1
       });
     }
 
@@ -42,7 +79,9 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
         type: 'user',
         name: `user${index + 1}`,
         displayName: `User ${index + 1}`,
-        description: 'Online now'
+        description: 'Online now',
+        icon: '👤',
+        color: 'from-blue-500 to-teal-500'
       });
     });
 
@@ -53,14 +92,18 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
         type: 'channel',
         name: 'everyone',
         displayName: 'everyone',
-        description: 'Notify everyone in the chat'
+        description: 'Notify everyone in the chat',
+        icon: '📢',
+        color: 'from-gray-400 to-gray-600'
       },
       {
         id: 'here',
         type: 'channel',
         name: 'here',
         displayName: 'here',
-        description: 'Notify everyone currently online'
+        description: 'Notify everyone currently online',
+        icon: '📍',
+        color: 'from-gray-400 to-gray-600'
       }
     );
 
@@ -101,8 +144,8 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
     document.body.removeChild(tempDiv);
     
     // Calculate position - show above the textarea
-    const top = rect.top - 200;
-    const left = Math.min(rect.left + (tempRect.width % rect.width), window.innerWidth - 250);
+    const top = rect.top - Math.min(250, window.innerHeight * 0.3);
+    const left = Math.min(rect.left + (tempRect.width % rect.width), window.innerWidth - 320);
     
     return { top, left };
   };
@@ -152,7 +195,7 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
           const selectedOption = mentionOptions[selectedIndex];
           const result = handleMentionSelect(selectedOption, currentText, cursorPosition);
           if (result && textareaRef.current) {
-            // CRITICAL FIX: Update the textarea value directly first
+            // Update the textarea value directly first
             textareaRef.current.value = result.newText;
             
             // Set cursor position
@@ -188,7 +231,9 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
 
     if (mentionMatch) {
       const beforeMention = beforeCursor.substring(0, mentionMatch.index);
-      const mentionText = `@${option.name} `;
+      const mentionText = option.type === 'ai' 
+        ? `@${option.displayName} ` 
+        : `@${option.name} `;
       const newText = beforeMention + mentionText + afterCursor;
       const newCursorPosition = beforeMention.length + mentionText.length;
 
@@ -198,7 +243,13 @@ export function useMentions({ onlineUsers = [], creditsBalance, textareaRef }: U
       return {
         newText,
         newCursorPosition,
-        isAIMention: option.type === 'ai'
+        isAIMention: option.type === 'ai',
+        selectedModel: option.type === 'ai' ? {
+          id: option.id,
+          name: option.displayName,
+          apiIdentifier: option.modelId || option.name,
+          cost: option.cost || 1
+        } : null
       };
     }
 

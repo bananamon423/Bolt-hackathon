@@ -186,6 +186,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       content: content.trim(),
       created_at: new Date().toISOString(),
       profiles: currentUser,
+      message_type: 'USER_TO_USER'
     };
 
     // Add optimistic message immediately
@@ -199,6 +200,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           sender_id: userId,
           sender_type: 'user',
           content: content.trim(),
+          message_type: 'USER_TO_LLM' // Assume it might be for LLM if it contains @mentions
         })
         .select(`
           *,
@@ -251,9 +253,10 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      console.log('🔄 Calling AI function...');
+      console.log('🔄 Calling OpenRouter function...');
 
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
+      // Use the new OpenRouter function
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/openrouter-chat`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.session.access_token}`,
@@ -268,21 +271,21 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       const result = await response.json();
       
-      console.log('🤖 AI function response:', result);
+      console.log('🤖 OpenRouter function response:', result);
       
       if (!response.ok) {
-        console.error('❌ AI function error:', result);
+        console.error('❌ OpenRouter function error:', result);
         throw new Error(result.error || 'AI request failed');
       }
 
       console.log('✅ AI message request completed');
       
       // The AI response should be automatically added via real-time subscription
-      // If it doesn't appear within 3 seconds, refresh messages
+      // If it doesn't appear within 5 seconds, refresh messages
       setTimeout(() => {
         console.log('🔄 Checking if AI response appeared...');
         fetchMessages();
-      }, 3000);
+      }, 5000);
       
       return result;
     } catch (error) {

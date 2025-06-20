@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Edit3, Check, X, ChevronDown, Share2, Copy, ExternalLink } from 'lucide-react';
 import { Chat, LLMModel } from '../lib/supabase';
+import { LastUsedLLMIndicator } from './LastUsedLLMIndicator';
 
 interface ChatHeaderProps {
   chat: Chat | null;
@@ -102,7 +103,7 @@ export function ChatHeader({
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 group">
                 <h1 className="text-lg font-semibold text-gray-900">{chat.chat_title}</h1>
                 <button
                   onClick={() => setIsEditing(true)}
@@ -124,13 +125,16 @@ export function ChatHeader({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Last Used LLM Indicator */}
+          <LastUsedLLMIndicator className="hidden lg:flex" />
+
           {/* Share Button */}
           <button
             onClick={handleShareClick}
             className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
           >
             <Share2 className="w-4 h-4" />
-            <span className="text-sm font-medium">Share</span>
+            <span className="text-sm font-medium hidden sm:inline">Share</span>
           </button>
 
           {/* Model Selector */}
@@ -146,19 +150,31 @@ export function ChatHeader({
             </button>
 
             {showModelDropdown && (
-              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                {models.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => handleModelSelect(model)}
-                    className={`w-full text-left px-4 py-2 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg ${
-                      selectedModel?.id === model.id ? 'bg-blue-50 text-blue-600' : ''
-                    }`}
-                  >
-                    <div className="font-medium">{model.model_name}</div>
-                    <div className="text-xs text-gray-500">{model.cost_per_token} credit/message</div>
-                  </button>
-                ))}
+              <div className="absolute top-full right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-10">
+                <div className="p-2">
+                  <div className="text-xs font-medium text-gray-500 mb-2 px-2">
+                    Available AI Models:
+                  </div>
+                  {models.map((model) => (
+                    <button
+                      key={model.id}
+                      onClick={() => handleModelSelect(model)}
+                      className={`w-full text-left px-3 py-3 hover:bg-gray-50 rounded-lg transition-colors ${
+                        selectedModel?.id === model.id ? 'bg-blue-50 border border-blue-200' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-gray-900">{model.model_name}</div>
+                          <div className="text-xs text-gray-500">{model.api_identifier}</div>
+                        </div>
+                        <div className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                          {model.cost_per_token} credit{model.cost_per_token > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

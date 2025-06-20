@@ -23,14 +23,14 @@ function MainApp() {
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isAIThinking, setIsAIThinking] = useState(false);
+  const [thinkingModelName, setThinkingModelName] = useState<string>('');
 
   // 3. Now, call the other hooks that DEPEND on the state above.
   const { chats, loading: chatsLoading, createChat, updateChatTitle } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
-
-  // ... the rest of your component code remains the same
 
   // Set default model
   useEffect(() => {
@@ -88,11 +88,40 @@ function MainApp() {
     }
   };
 
-  const handleSendAIMessage = async (content: string) => {
-    if (user && currentChat && selectedModel) {
-      await sendAIMessage(content, selectedModel.id);
-      // Refresh profile to update credits
-      refreshProfile();
+  const handleSendAIMessage = async (content: string, modelId?: string, modelName?: string) => {
+    if (user && currentChat) {
+      // Set thinking state
+      setIsAIThinking(true);
+      setThinkingModelName(modelName || selectedModel?.model_name || 'AI');
+      
+      try {
+        // Use provided modelId or fall back to selected model
+        const targetModelId = modelId || selectedModel?.id;
+        if (!targetModelId) {
+          throw new Error('No model selected');
+        }
+
+        await sendAIMessage(content, targetModelId);
+        
+        // Update last used LLM in database
+        if (modelName) {
+          const targetModel = models.find(m => m.model_name === modelName);
+          if (targetModel) {
+            await supabase.rpc('update_last_used_llm', {
+              model_identifier: targetModel.api_identifier
+            });
+          }
+        }
+        
+        // Refresh profile to update credits
+        refreshProfile();
+      } catch (error) {
+        console.error('AI message error:', error);
+        throw error;
+      } finally {
+        setIsAIThinking(false);
+        setThinkingModelName('');
+      }
     }
   };
 
@@ -142,12 +171,15 @@ function MainApp() {
             <MessageList
               messages={messages}
               currentUserId={user.id}
+              isAIThinking={isAIThinking}
+              thinkingModelName={thinkingModelName}
             />
             <MessageInput
               onSendMessage={handleSendMessage}
               onSendAIMessage={handleSendAIMessage}
               creditsBalance={profile.credits_balance}
               onlineUsers={onlineUsers}
+              availableModels={models}
             />
           </>
         ) : (
@@ -160,7 +192,7 @@ function MainApp() {
                 Welcome to AI Workspace
               </h2>
               <p className="text-gray-600 mb-4">
-                Create a new chat to start collaborating with your team and AI assistant.
+                Create a new chat to start collaborating with your team and multiple AI assistants.
               </p>
               <button
                 onClick={handleNewChat}
