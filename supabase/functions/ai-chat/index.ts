@@ -1,7 +1,7 @@
 /*
-# AI Chat Edge Function - Fixed Gemini API Format
+# AI Chat Edge Function - Fixed Model UUID Lookup
 
-This version uses the proper conversational format with roles that the Gemini API expects.
+This version properly looks up the model UUID from the database before inserting messages.
 Uses the VITE_GEMINI_API_KEY environment variable for Gemini API access.
 */
 
@@ -73,6 +73,7 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(`👤 User ${user.id} asking: "${message}" in chat ${chatId}`);
+    console.log(`🤖 Model ID received: "${modelId}"`);
 
     // Check user credits
     const { data: profile, error: profileError } = await supabase
@@ -179,6 +180,52 @@ Deno.serve(async (req: Request) => {
 
       console.log("✅ Gemini response received, length:", aiResponse.length);
 
+      // ----- START NEW CODE BLOCK -----
+      console.log("🔍 Looking up model UUID for modelId:", modelId);
+
+      // Look up the model UUID from the database
+      // For the hardcoded Gwiz model, we'll handle it specially
+      let retrievedModelUUID = null;
+      
+      if (modelId === 'gwiz-hardcoded') {
+        // For the hardcoded Gwiz model, we can either:
+        // 1. Set model_id to null (since it's a special hardcoded model)
+        // 2. Or create a special entry in llm_models table
+        console.log("🤖 Using hardcoded Gwiz model - setting model_id to null");
+        retrievedModelUUID = null;
+      } else {
+        // For other models, look them up in the database
+        const { data: modelData, error: modelError } = await supabase
+          .from("llm_models")
+          .select("id")
+          .eq("id", modelId) // Try looking up by ID first
+          .single();
+
+        if (modelError || !modelData) {
+          console.log("🔍 Model not found by ID, trying by model_name...");
+          
+          // Try looking up by model_name as fallback
+          const { data: modelDataByName, error: modelErrorByName } = await supabase
+            .from("llm_models")
+            .select("id")
+            .eq("model_name", "Gwiz")
+            .single();
+
+          if (modelErrorByName || !modelDataByName) {
+            console.error("❌ Model lookup error:", modelError, modelErrorByName);
+            console.log("⚠️ Could not find model in database, setting model_id to null");
+            retrievedModelUUID = null;
+          } else {
+            retrievedModelUUID = modelDataByName.id;
+            console.log("✅ Found model UUID by name:", retrievedModelUUID);
+          }
+        } else {
+          retrievedModelUUID = modelData.id;
+          console.log("✅ Found model UUID by ID:", retrievedModelUUID);
+        }
+      }
+      // ----- END NEW CODE BLOCK -----
+
       // Save AI message to database with enhanced metadata
       console.log("💾 Saving AI message to database...");
       
@@ -189,12 +236,13 @@ Deno.serve(async (req: Request) => {
           sender_id: null,
           sender_type: "ai",
           content: aiResponse,
-          model_id: modelId,
+          model_id: retrievedModelUUID, // Use the retrieved UUID instead of modelId
           token_cost: 1,
           message_type: "LLM_TO_USER",
           metadata: {
             model_used: modelIdentifier,
-            api_source: "google_gemini_direct"
+            api_source: "google_gemini_direct",
+            original_model_id: modelId // Keep track of the original modelId for debugging
           },
           llm_model_used: "google/gemini-1.5-flash",
           input_tokens: 0, // Gemini doesn't provide token counts in this API
