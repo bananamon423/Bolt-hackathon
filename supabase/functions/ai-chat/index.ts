@@ -2,6 +2,7 @@
 # AI Chat Edge Function - Enhanced with Better Logging
 
 This version includes comprehensive logging to help debug real-time issues.
+Uses the VITE_GEMINI_API_KEY environment variable for Gemini API access.
 */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -31,10 +32,16 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const geminiApiKey = "AIzaSyDgzgvj-HARYBLmVEQJrE4dSh4HimbvozA";
+    
+    // Use the VITE_GEMINI_API_KEY from environment variables
+    const geminiApiKey = Deno.env.get("VITE_GEMINI_API_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error("Missing Supabase configuration");
+    }
+
+    if (!geminiApiKey) {
+      throw new Error("Missing Gemini API key (VITE_GEMINI_API_KEY)");
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -102,9 +109,9 @@ Deno.serve(async (req: Request) => {
       ? `Previous conversation:\n${context}\n\nUser: ${message}\n\nGwiz (respond helpfully and concisely):`
       : `User: ${message}\n\nGwiz (respond helpfully and concisely):`;
 
-    console.log("🤖 Calling Gemini API...");
+    console.log("🤖 Calling Gemini API with VITE_GEMINI_API_KEY...");
 
-    // Call Gemini API
+    // Call Gemini API using the environment variable
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelIdentifier}:generateContent?key=${geminiApiKey}`,
       {
@@ -138,7 +145,7 @@ Deno.serve(async (req: Request) => {
 
     console.log("✅ Gemini response received, length:", aiResponse.length);
 
-    // Save AI message to database
+    // Save AI message to database with enhanced metadata
     console.log("💾 Saving AI message to database...");
     
     const { data: savedMessage, error: messageError } = await supabase
@@ -150,6 +157,15 @@ Deno.serve(async (req: Request) => {
         content: aiResponse,
         model_id: modelId,
         token_cost: 1,
+        message_type: "LLM_TO_USER",
+        metadata: {
+          model_used: modelIdentifier,
+          api_source: "google_gemini_direct"
+        },
+        llm_model_used: "google/gemini-1.5-flash",
+        input_tokens: 0, // Gemini doesn't provide token counts in this API
+        output_tokens: 0,
+        cost_in_credits: 1
       })
       .select()
       .single();
@@ -174,13 +190,18 @@ Deno.serve(async (req: Request) => {
 
     console.log("✅ Credits updated");
 
+    // Update last used LLM to Gwiz
+    await supabase.rpc('update_last_used_llm', {
+      model_identifier: 'google/gemini-1.5-flash'
+    });
+
     // Log transaction (fire and forget)
     supabase
       .from("credit_transactions")
       .insert({
         user_id: user.id,
         amount: -1,
-        description: "AI chat response",
+        description: "AI chat response from Gwiz",
         chat_id: chatId,
       })
       .then(() => console.log("✅ Transaction logged"))
@@ -225,6 +246,8 @@ Deno.serve(async (req: Request) => {
 
     const errorMessage = error.message.includes("Gemini") 
       ? `AI service error: ${error.message}`
+      : error.message.includes("credits")
+      ? error.message
       : "Gwiz is temporarily unavailable. Please try again.";
 
     return new Response(
