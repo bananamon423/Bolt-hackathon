@@ -17,8 +17,7 @@ export function useChats(userId: string | undefined) {
         { 
           event: '*', 
           schema: 'public', 
-          table: 'chats',
-          filter: `owner_id=eq.${userId}`
+          table: 'chats'
         },
         () => fetchChats()
       )
@@ -48,6 +47,9 @@ export function useChats(userId: string | undefined) {
     if (!userId) return;
 
     try {
+      console.log('📥 Fetching chats for user:', userId);
+      
+      // Get all chats where user is a member
       const { data, error } = await supabase
         .from('chat_members')
         .select(`
@@ -64,13 +66,17 @@ export function useChats(userId: string | undefined) {
         `)
         .eq('user_id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching chats:', error);
+        throw error;
+      }
 
       const chatList = data
         ?.map(item => item.chats)
         .filter(Boolean)
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()) || [];
 
+      console.log('📥 Fetched', chatList.length, 'chats');
       setChats(chatList as Chat[]);
     } catch (error) {
       console.error('Error fetching chats:', error);
@@ -83,6 +89,8 @@ export function useChats(userId: string | undefined) {
     if (!userId) return null;
 
     try {
+      console.log('🆕 Creating new chat:', title);
+      
       const { data: chat, error: chatError } = await supabase
         .from('chats')
         .insert({
@@ -94,7 +102,9 @@ export function useChats(userId: string | undefined) {
 
       if (chatError) throw chatError;
 
-      // Add user as member
+      console.log('✅ Chat created:', chat.id);
+
+      // Add user as owner/member
       const { error: memberError } = await supabase
         .from('chat_members')
         .insert({
@@ -103,7 +113,12 @@ export function useChats(userId: string | undefined) {
           role: 'owner',
         });
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('❌ Error adding user as member:', memberError);
+        throw memberError;
+      }
+
+      console.log('✅ User added as chat owner');
 
       await fetchChats();
       return chat;
@@ -115,15 +130,48 @@ export function useChats(userId: string | undefined) {
 
   const updateChatTitle = async (chatId: string, title: string) => {
     try {
+      console.log('📝 Updating chat title:', chatId, title);
+      
       const { error } = await supabase
         .from('chats')
         .update({ chat_title: title })
         .eq('id', chatId);
 
       if (error) throw error;
+      
+      console.log('✅ Chat title updated');
       await fetchChats();
     } catch (error) {
       console.error('Error updating chat title:', error);
+    }
+  };
+
+  const joinChatByShareLink = async (shareLink: string) => {
+    if (!userId) return null;
+
+    try {
+      console.log('🚪 Joining chat by share link:', shareLink);
+      
+      const { data, error } = await supabase.rpc('join_chat_by_share_link', {
+        share_link_uuid: shareLink
+      });
+
+      if (error) {
+        console.error('❌ Error joining chat:', error);
+        throw error;
+      }
+
+      console.log('✅ Join result:', data);
+      
+      if (data.success) {
+        await fetchChats();
+        return data.chat_id;
+      } else {
+        throw new Error(data.error || 'Failed to join chat');
+      }
+    } catch (error) {
+      console.error('Error joining chat by share link:', error);
+      throw error;
     }
   };
 
@@ -132,6 +180,7 @@ export function useChats(userId: string | undefined) {
     loading,
     createChat,
     updateChatTitle,
+    joinChatByShareLink,
     refetch: fetchChats,
   };
 }
