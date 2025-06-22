@@ -174,13 +174,21 @@ export function SharedChatPage() {
         <div className="text-center">
           <div className="bg-red-100 border border-red-200 rounded-lg p-6 max-w-md">
             <h1 className="text-xl font-semibold text-red-800 mb-2">Error</h1>
-            <p className="text-red-600">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Try Again
-            </button>
+            <p className="text-red-600 mb-4">{error}</p>
+            <div className="space-y-2">
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.href = '/'}
+                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Go to Home
+              </button>
+            </div>
           </div>
         </div>
       </div>

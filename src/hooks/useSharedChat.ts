@@ -20,10 +20,12 @@ export function useSharedChat() {
       try {
         console.log('🔍 Loading shared chat with link:', shareLink);
         
+        // First try to get the chat using the share_link
         const { data, error } = await supabase
           .from('chats')
           .select('*')
-          .eq('share_link', shareLink);
+          .eq('share_link', shareLink)
+          .maybeSingle(); // Use maybeSingle to handle 0 or 1 results gracefully
 
         if (error) {
           console.error('❌ Error loading shared chat:', error);
@@ -31,18 +33,15 @@ export function useSharedChat() {
           return;
         }
 
-        // Check if any chat was found
-        if (!data || data.length === 0) {
+        if (!data) {
           console.log('❌ No chat found with share link:', shareLink);
           setError('Chat not found or link is invalid');
           setChat(null);
           return;
         }
 
-        // Use the first (and should be only) chat found
-        const foundChat = data[0];
-        console.log('✅ Shared chat loaded:', foundChat);
-        setChat(foundChat);
+        console.log('✅ Shared chat loaded:', data);
+        setChat(data);
       } catch (err) {
         console.error('Error loading shared chat:', err);
         setError('Failed to load chat');
@@ -62,12 +61,12 @@ export function useSharedChat() {
       console.log('🚪 Attempting to join chat:', chat.id);
 
       const { data, error } = await supabase.rpc('join_chat_by_share_link', {
-        share_link_uuid: chat.share_link
+        p_share_link_uuid: chat.share_link
       });
 
       if (error) {
         console.error('❌ Error joining chat:', error);
-        setError('Failed to join chat');
+        setError('Failed to join chat: ' + error.message);
         return false;
       }
 
@@ -110,9 +109,9 @@ export function useSharedChat() {
         .select('role')
         .eq('chat_id', chat.id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle to handle 0 or 1 results
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error checking membership:', error);
         return false;
       }
