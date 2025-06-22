@@ -12,9 +12,19 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const [loading, setLoading] = useState(true);
   const subscriptionRef = useRef<any>(null);
   const lastMessageIdRef = useRef<number | null>(null);
+  const chatIdRef = useRef<string | undefined>(chatId);
+
+  // Update chat ID ref when it changes
+  useEffect(() => {
+    chatIdRef.current = chatId;
+  }, [chatId]);
 
   useEffect(() => {
-    if (!chatId) return;
+    if (!chatId) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
 
     fetchMessages();
     setupRealtimeSubscription();
@@ -26,7 +36,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
   const cleanupSubscription = () => {
     if (subscriptionRef.current) {
-      console.log('Cleaning up subscription');
+      console.log('🧹 Cleaning up subscription for chat:', chatIdRef.current);
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
     }
@@ -38,12 +48,14 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     // Clean up any existing subscription
     cleanupSubscription();
 
-    console.log('Setting up real-time subscription for chat:', chatId);
+    console.log('📡 Setting up real-time subscription for chat:', chatId);
 
     // Create subscription with a unique channel name
-    const channel = supabase.channel(`messages_${chatId}_${Date.now()}`, {
+    const channelName = `messages_${chatId}_${Date.now()}`;
+    const channel = supabase.channel(channelName, {
       config: {
-        broadcast: { self: true }
+        broadcast: { self: true },
+        presence: { key: 'user_id' }
       }
     });
 
@@ -57,82 +69,147 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           filter: `chat_id=eq.${chatId}`
         },
         async (payload) => {
-          console.log('🔥 Real-time message received:', payload);
-          
-          const newMessage = payload.new as any;
-          
-          // Avoid duplicate processing
-          if (lastMessageIdRef.current === newMessage.id) {
-            console.log('Duplicate message, skipping');
-            return;
-          }
-          
-          lastMessageIdRef.current = newMessage.id;
-
-          try {
-            // Fetch complete message with profile data
-            const { data: fullMessage, error } = await supabase
-              .from('messages')
-              .select(`
-                *,
-                profiles!messages_sender_id_fkey (
-                  id,
-                  username,
-                  profile_picture_url
-                )
-              `)
-              .eq('id', newMessage.id)
-              .single();
-
-            if (error) {
-              console.error('Error fetching full message:', error);
-              return;
-            }
-
-            if (fullMessage) {
-              console.log('✅ Adding message to UI:', fullMessage);
-              
-              setMessages(currentMessages => {
-                // Check if message already exists
-                const exists = currentMessages.some(m => m.id === fullMessage.id);
-                if (exists) {
-                  console.log('Message already exists, skipping');
-                  return currentMessages;
-                }
-
-                // Add new message and sort by timestamp
-                const newMessages = [...currentMessages, fullMessage];
-                return newMessages.sort((a, b) => 
-                  new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-                );
-              });
-            }
-          } catch (err) {
-            console.error('Error processing real-time message:', err);
-          }
+          console.log('🔥 Real-time INSERT received:', payload);
+          await handleRealtimeMessage(payload.new);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${chatId}`
+        },
+        async (payload) => {
+          console.log('🔄 Real-time UPDATE received:', payload);
+          await handleRealtimeUpdate(payload.new);
         }
       )
       .subscribe((status) => {
-        console.log('📡 Subscription status:', status);
+        console.log('📡 Subscription status for', channelName, ':', status);
         
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to real-time messages');
+          console.log('✅ Successfully subscribed to real-time messages for chat:', chatId);
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Channel subscription error');
+          console.error('❌ Channel subscription error for chat:', chatId);
           // Retry subscription after a delay
           setTimeout(() => {
-            console.log('🔄 Retrying subscription...');
-            setupRealtimeSubscription();
+            if (chatIdRef.current === chatId) {
+              console.log('🔄 Retrying subscription...');
+              setupRealtimeSubscription();
+            }
           }, 2000);
         } else if (status === 'TIMED_OUT') {
-          console.error('⏰ Subscription timed out');
+          console.error('⏰ Subscription timed out for chat:', chatId);
           // Retry subscription
           setTimeout(() => {
-            console.log('🔄 Retrying subscription after timeout...');
-            setupRealtimeSubscription();
+            if (chatIdRef.current === chatId) {
+              console.log('🔄 Retrying subscription after timeout...');
+              setupRealtimeSubscription();
+            }
           }, 1000);
         }
       });
+  };
+
+  const handleRealtimeMessage = async (newMessage: any) => {
+    // Only process if this is for the current chat
+    if (newMessage.chat_id !== chatIdRef.current) {
+      console.log('🚫 Ignoring message for different chat');
+      return;
+    }
+
+    // Avoid duplicate processing
+    if (lastMessageIdRef.current === newMessage.id) {
+      console.log('🚫 Duplicate message, skipping');
+      return;
+    }
+    
+    lastMessageIdRef.current = newMessage.id;
+
+    try {
+      // Fetch complete message with profile data
+      const { data: fullMessage, error } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          profiles!messages_sender_id_fkey (
+            id,
+            username,
+            profile_picture_url
+          )
+        `)
+        .eq('id', newMessage.id)
+        .single();
+
+      if (error) {
+        console.error('❌ Error fetching full message:', error);
+        return;
+      }
+
+      if (fullMessage) {
+        console.log('✅ Adding new message to UI:', fullMessage.id);
+        
+        setMessages(currentMessages => {
+          // Check if message already exists
+          const exists = currentMessages.some(m => m.id === fullMessage.id);
+          if (exists) {
+            console.log('🚫 Message already exists, skipping');
+            return currentMessages;
+          }
+
+          // Add new message and sort by timestamp
+          const newMessages = [...currentMessages, fullMessage];
+          return newMessages.sort((a, b) => 
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        });
+      }
+    } catch (err) {
+      console.error('❌ Error processing real-time message:', err);
+    }
+  };
+
+  const handleRealtimeUpdate = async (updatedMessage: any) => {
+    // Only process if this is for the current chat
+    if (updatedMessage.chat_id !== chatIdRef.current) {
+      console.log('🚫 Ignoring update for different chat');
+      return;
+    }
+
+    try {
+      // Fetch complete updated message with profile data
+      const { data: fullMessage, error } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          profiles!messages_sender_id_fkey (
+            id,
+            username,
+            profile_picture_url
+          )
+        `)
+        .eq('id', updatedMessage.id)
+        .single();
+
+      if (error) {
+        console.error('❌ Error fetching updated message:', error);
+        return;
+      }
+
+      if (fullMessage) {
+        console.log('✅ Updating message in UI:', fullMessage.id);
+        
+        setMessages(currentMessages => {
+          return currentMessages.map(m => 
+            m.id === fullMessage.id ? fullMessage : m
+          );
+        });
+      }
+    } catch (err) {
+      console.error('❌ Error processing real-time update:', err);
+    }
   };
 
   const fetchMessages = async () => {
@@ -165,7 +242,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         lastMessageIdRef.current = data[data.length - 1].id;
       }
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      console.error('❌ Error fetching messages:', error);
     } finally {
       setLoading(false);
     }
@@ -176,22 +253,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
     console.log('📤 Sending message:', content);
 
-    // Create optimistic message
-    const tempId = `temp_${Date.now()}_${Math.random()}`;
-    const optimisticMessage: Message = {
-      id: tempId as any,
-      chat_id: chatId,
-      sender_id: userId,
-      sender_type: 'user',
-      content: content.trim(),
-      created_at: new Date().toISOString(),
-      profiles: currentUser,
-      message_type: 'USER_TO_USER'
-    };
-
-    // Add optimistic message immediately
-    setMessages(currentMessages => [...currentMessages, optimisticMessage]);
-
     try {
       const { data: insertedMessage, error } = await supabase
         .from('messages')
@@ -200,7 +261,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           sender_id: userId,
           sender_type: 'user',
           content: content.trim(),
-          message_type: 'USER_TO_LLM' // Assume it might be for LLM if it contains @mentions
+          message_type: 'USER_TO_USER'
         })
         .select(`
           *,
@@ -214,30 +275,13 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       if (error) {
         console.error('❌ Error sending message:', error);
-        // Remove optimistic message on error
-        setMessages(currentMessages => 
-          currentMessages.filter(m => m.id !== tempId)
-        );
         throw error;
       }
 
-      console.log('✅ Message sent successfully');
-
-      // Replace optimistic message with real message
-      if (insertedMessage) {
-        setMessages(currentMessages => 
-          currentMessages.map(m => 
-            m.id === tempId ? insertedMessage : m
-          )
-        );
-      }
-
+      console.log('✅ Message sent successfully:', insertedMessage.id);
       return insertedMessage;
     } catch (error) {
-      console.error('Error sending message:', error);
-      setMessages(currentMessages => 
-        currentMessages.filter(m => m.id !== tempId)
-      );
+      console.error('❌ Error sending message:', error);
       throw error;
     }
   };
@@ -258,13 +302,11 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      // *** ENHANCED ROUTING LOGIC - FIXED VERSION ***
+      // Enhanced routing logic
       let functionToInvoke = '';
       let functionPayload = {};
 
-      // Check if the model is exactly 'Gwiz' or the hardcoded ID
-      const isGwizModel = modelName === 'Gwiz' || 
-                         modelId === 'gwiz-hardcoded';
+      const isGwizModel = modelName === 'Gwiz' || modelId === 'gwiz-hardcoded';
 
       console.log('🔄 Routing decision:', {
         modelName,
@@ -273,7 +315,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       });
 
       if (isGwizModel) {
-        // Route to ai-chat function for Gwiz (uses hardcoded VITE_GEMINI_API_KEY)
         console.log('🔄 ✅ ROUTING TO AI-CHAT FUNCTION FOR GWIZ');
         functionToInvoke = 'ai-chat';
         functionPayload = {
@@ -282,7 +323,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           modelId,
         };
       } else {
-        // For all other models, use the OpenRouter function
         console.log('🔄 ✅ ROUTING TO OPENROUTER-CHAT FUNCTION FOR:', modelName);
         functionToInvoke = 'openrouter-chat';
         functionPayload = {
@@ -291,7 +331,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           modelId,
         };
       }
-      // *** END OF ENHANCED ROUTING LOGIC ***
 
       console.log(`🔄 Calling ${functionToInvoke} function with payload:`, functionPayload);
 
@@ -314,14 +353,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       }
 
       console.log(`✅ ${functionToInvoke} request completed successfully`);
-      
-      // The AI response should be automatically added via real-time subscription
-      // If it doesn't appear within 5 seconds, refresh messages
-      setTimeout(() => {
-        console.log('🔄 Checking if AI response appeared...');
-        fetchMessages();
-      }, 5000);
-      
       return result;
     } catch (error) {
       console.error('❌ Error sending AI message:', error);
