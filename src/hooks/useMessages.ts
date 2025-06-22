@@ -302,9 +302,8 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       console.log('✅ Message sent successfully:', insertedMessage.id);
       
-      // The message should appear via real-time subscription
-      // But add it immediately for better UX (will be deduplicated if needed)
-      addMessageToState(insertedMessage);
+      // Don't add the message immediately - let the real-time subscription handle it
+      // This ensures all users see the message at the same time
       
       return insertedMessage;
     } catch (error) {
