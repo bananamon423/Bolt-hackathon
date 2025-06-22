@@ -23,21 +23,26 @@ export function useSharedChat() {
         const { data, error } = await supabase
           .from('chats')
           .select('*')
-          .eq('share_link', shareLink)
-          .single();
+          .eq('share_link', shareLink);
 
         if (error) {
           console.error('❌ Error loading shared chat:', error);
-          if (error.code === 'PGRST116') {
-            setError('Chat not found or link is invalid');
-          } else {
-            setError('Failed to load chat');
-          }
+          setError('Failed to load chat');
           return;
         }
 
-        console.log('✅ Shared chat loaded:', data);
-        setChat(data);
+        // Check if any chat was found
+        if (!data || data.length === 0) {
+          console.log('❌ No chat found with share link:', shareLink);
+          setError('Chat not found or link is invalid');
+          setChat(null);
+          return;
+        }
+
+        // Use the first (and should be only) chat found
+        const foundChat = data[0];
+        console.log('✅ Shared chat loaded:', foundChat);
+        setChat(foundChat);
       } catch (err) {
         console.error('Error loading shared chat:', err);
         setError('Failed to load chat');
