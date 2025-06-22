@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useChats } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
@@ -25,17 +25,15 @@ const GWIZ_MODEL: LLMModel = {
 };
 
 function MainApp() {
-  // 1. Get the authenticated user first.
+  const location = useLocation();
   const { user, profile, loading, signIn, signUp, signOut, refreshProfile } = useAuth();
   
-  // 2. Define all your component's state variables.
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [thinkingModelName, setThinkingModelName] = useState<string>('');
 
-  // 3. Now, call the other hooks that DEPEND on the state above.
   const { chats, loading: chatsLoading, createChat, updateChatTitle } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
   const { models } = useModels();
@@ -54,12 +52,24 @@ function MainApp() {
     }
   }, [allModels, selectedModel]);
 
-  // Auto-select first chat if none selected
+  // Handle navigation state for shared chat joins
   useEffect(() => {
-    if (chats.length > 0 && !currentChat) {
+    if (location.state?.selectedChatId && chats.length > 0) {
+      const targetChat = chats.find(chat => chat.id === location.state.selectedChatId);
+      if (targetChat) {
+        setCurrentChat(targetChat);
+        // Clear the state to prevent re-selection
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state, chats]);
+
+  // Auto-select first chat if none selected (and not coming from shared chat)
+  useEffect(() => {
+    if (chats.length > 0 && !currentChat && !location.state?.selectedChatId) {
       setCurrentChat(chats[0]);
     }
-  }, [chats, currentChat]);
+  }, [chats, currentChat, location.state]);
 
   const handleNewChat = async () => {
     const newChat = await createChat();
@@ -197,6 +207,7 @@ function MainApp() {
               currentUserId={user.id}
               isAIThinking={isAIThinking}
               thinkingModelName={thinkingModelName}
+              chatOwnerId={currentChat.owner_id}
             />
             <MessageInput
               onSendMessage={handleSendMessage}

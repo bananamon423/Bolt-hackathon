@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useMessages } from '../hooks/useMessages';
 import { useModels } from '../hooks/useModels';
 import { usePresence } from '../hooks/usePresence';
+import { useSharedChat } from '../hooks/useSharedChat';
 import { AuthForm } from '../components/AuthForm';
 import { ChatHeader } from '../components/ChatHeader';
 import { MessageList } from '../components/MessageList';
 import { MessageInput } from '../components/MessageInput';
-import { Chat, LLMModel } from '../lib/supabase';
+import { LLMModel } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 
 // Define Gwiz as a special hardcoded model
@@ -21,17 +22,13 @@ const GWIZ_MODEL: LLMModel = {
 };
 
 export function SharedChatPage() {
-  const { shareLink } = useParams<{ shareLink: string }>();
   const { user, profile, loading, signIn, signUp, refreshProfile } = useAuth();
+  const { shareLink, chat, loading: chatLoading, error, hasJoined, isJoining, joinChat, checkMembership, setError } = useSharedChat();
   
-  const [chat, setChat] = useState<Chat | null>(null);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
-  const [chatLoading, setChatLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasJoined, setHasJoined] = useState(false);
-  const [isJoining, setIsJoining] = useState(false);
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [thinkingModelName, setThinkingModelName] = useState<string>('');
+  const [joinSuccess, setJoinSuccess] = useState(false);
 
   const { messages, sendMessage, sendAIMessage } = useMessages(chat?.id, profile);
   const { models } = useModels();
@@ -43,88 +40,32 @@ export function SharedChatPage() {
     ...models.filter(model => model.id !== 'gwiz-hardcoded' && model.model_name !== 'Gwiz')
   ];
 
-  // Load chat by share link
-  useEffect(() => {
-    if (!shareLink) return;
-    
-    const loadSharedChat = async () => {
-      try {
-        console.log('🔍 Loading shared chat with link:', shareLink);
-        
-        const { data, error } = await supabase
-          .from('chats')
-          .select('*')
-          .eq('share_link', shareLink)
-          .single();
-
-        if (error) {
-          console.error('❌ Error loading shared chat:', error);
-          if (error.code === 'PGRST116') {
-            setError('Chat not found or link is invalid');
-          } else {
-            setError('Failed to load chat');
-          }
-          return;
-        }
-
-        console.log('✅ Shared chat loaded:', data);
-        setChat(data);
-      } catch (err) {
-        console.error('Error loading shared chat:', err);
-        setError('Failed to load chat');
-      } finally {
-        setChatLoading(false);
-      }
-    };
-
-    loadSharedChat();
-  }, [shareLink]);
-
-  // Auto-join user to chat when they're authenticated
-  useEffect(() => {
-    if (!user || !chat || hasJoined || isJoining) return;
-
-    const joinChat = async () => {
-      setIsJoining(true);
-      try {
-        console.log('🚪 Attempting to join chat:', chat.id);
-
-        // Use the new join function
-        const { data, error } = await supabase.rpc('join_chat_by_share_link', {
-          share_link_uuid: chat.share_link
-        });
-
-        if (error) {
-          console.error('❌ Error joining chat:', error);
-          setError('Failed to join chat');
-          return;
-        }
-
-        console.log('✅ Join result:', data);
-        
-        if (data.success) {
-          setHasJoined(true);
-          console.log('🎉 Successfully joined chat');
-        } else {
-          setError(data.error || 'Failed to join chat');
-        }
-      } catch (err) {
-        console.error('Error joining chat:', err);
-        setError('Failed to join chat');
-      } finally {
-        setIsJoining(false);
-      }
-    };
-
-    joinChat();
-  }, [user, chat, profile, hasJoined, isJoining]);
-
   // Set default model
   useEffect(() => {
     if (allModels.length > 0 && !selectedModel) {
-      setSelectedModel(GWIZ_MODEL); // Default to Gwiz
+      setSelectedModel(GWIZ_MODEL);
     }
   }, [allModels, selectedModel]);
+
+  // Check membership when user and chat are available
+  useEffect(() => {
+    if (user && chat && !hasJoined && !isJoining) {
+      checkMembership(user.id);
+    }
+  }, [user, chat, hasJoined, isJoining, checkMembership]);
+
+  // Auto-join user to chat when they're authenticated
+  useEffect(() => {
+    if (user && chat && !hasJoined && !isJoining) {
+      const performJoin = async () => {
+        const success = await joinChat(user.id);
+        if (success) {
+          setJoinSuccess(true);
+        }
+      };
+      performJoin();
+    }
+  }, [user, chat, hasJoined, isJoining, joinChat]);
 
   const handleUpdateTitle = async (title: string) => {
     if (!chat || !user) return;
@@ -143,7 +84,7 @@ export function SharedChatPage() {
 
       if (error) throw error;
       
-      setChat({ ...chat, chat_title: title });
+      // Update local state would be handled by real-time subscription
     } catch (err) {
       console.error('Error updating chat title:', err);
       setError('Failed to update chat title');
@@ -178,24 +119,16 @@ export function SharedChatPage() {
 
   const handleSendAIMessage = async (content: string, modelId?: string, modelName?: string) => {
     if (user && chat) {
-      // Set thinking state
       setIsAIThinking(true);
       setThinkingModelName(modelName || selectedModel?.model_name || 'AI');
       
       try {
-        // Use provided modelId or fall back to selected model
         const targetModelId = modelId || selectedModel?.id;
         const targetModelName = modelName || selectedModel?.model_name;
         
         if (!targetModelId) {
           throw new Error('No model selected');
         }
-
-        console.log('🚀 SharedChatPage - Sending AI message:', {
-          content,
-          targetModelId,
-          targetModelName
-        });
 
         await sendAIMessage(content, targetModelId, targetModelName);
         
@@ -209,7 +142,6 @@ export function SharedChatPage() {
           }
         }
         
-        // Refresh profile to update credits
         refreshProfile();
       } catch (error) {
         console.error('AI message error:', error);
@@ -257,16 +189,29 @@ export function SharedChatPage() {
 
   if (!user || !profile) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50">
         <div className="max-w-md mx-auto pt-16">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl text-white">💬</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Join Chat</h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-4">
               Sign in to join "{chat?.chat_title || 'this chat'}" and start participating in the conversation
             </p>
+            {chat && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h3 className="font-medium text-blue-900 mb-2">Chat Preview</h3>
+                <div className="text-left">
+                  <p className="text-sm text-blue-800 mb-1">
+                    <strong>Title:</strong> {chat.chat_title}
+                  </p>
+                  <p className="text-sm text-blue-800">
+                    <strong>Created:</strong> {new Date(chat.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
           <AuthForm onSignIn={signIn} onSignUp={signUp} />
         </div>
@@ -282,8 +227,28 @@ export function SharedChatPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Joining chat...</p>
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-teal-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Joining Chat</h2>
+          <p className="text-gray-600">Adding you to "{chat.chat_title}"...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (joinSuccess && !hasJoined) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl text-white">✅</span>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Successfully Joined!</h2>
+          <p className="text-gray-600 mb-4">
+            You've been added to "{chat.chat_title}". Redirecting to your dashboard...
+          </p>
+          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>
       </div>
     );
@@ -291,7 +256,7 @@ export function SharedChatPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      {/* Header with join indicator */}
+      {/* Header with join status */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -301,7 +266,7 @@ export function SharedChatPage() {
             <div>
               <h1 className="text-lg font-semibold text-gray-900">Shared Chat</h1>
               <p className="text-sm text-gray-600">
-                {hasJoined ? '✅ You have joined this chat' : '⏳ Joining chat...'}
+                {hasJoined ? '✅ You are a member of this chat' : '⏳ Joining chat...'}
               </p>
             </div>
           </div>
@@ -329,6 +294,7 @@ export function SharedChatPage() {
         currentUserId={user.id}
         isAIThinking={isAIThinking}
         thinkingModelName={thinkingModelName}
+        chatOwnerId={chat.owner_id}
       />
 
       <MessageInput
@@ -337,6 +303,7 @@ export function SharedChatPage() {
         creditsBalance={profile.credits_balance}
         onlineUsers={onlineUsers}
         availableModels={allModels}
+        disabled={!hasJoined}
       />
     </div>
   );

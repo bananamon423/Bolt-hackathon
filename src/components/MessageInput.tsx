@@ -312,6 +312,15 @@ export function MessageInput({
           </p>
         </div>
       )}
+
+      {disabled && (
+        <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-yellow-500" />
+          <p className="text-yellow-700 text-sm">
+            Please wait while we add you to this chat...
+          </p>
+        </div>
+      )}
       
       {/* Mention Dropdown */}
       <MentionDropdown
@@ -330,12 +339,16 @@ export function MessageInput({
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}
             placeholder={
-              isAIMessage 
+              disabled
+                ? "Joining chat..."
+                : isAIMessage 
                 ? `Ask ${aiMention?.name} anything...` 
                 : "Type your message... (Use @ to mention AI models or users)"
             }
             className={`w-full resize-none rounded-lg px-4 py-3 focus:ring-2 focus:border-transparent transition-all duration-200 ${
-              isAIMessage
+              disabled
+                ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'
+                : isAIMessage
                 ? 'border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 focus:ring-purple-500'
                 : 'border border-gray-300 bg-white focus:ring-blue-500'
             }`}
@@ -399,7 +412,9 @@ export function MessageInput({
       
       <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
         <span>
-          {isAIMessage 
+          {disabled
+            ? "Please wait while joining the chat..."
+            : isAIMessage 
             ? `🤖 AI Mode: ${aiMention?.name} - Press Enter to send` 
             : "Press Enter to send, Shift+Enter for new line, @ to mention"
           }
