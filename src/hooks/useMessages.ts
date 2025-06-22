@@ -75,7 +75,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
               .from('messages')
               .select(`
                 *,
-                profiles (
+                profiles!messages_sender_id_fkey (
                   id,
                   username,
                   profile_picture_url
@@ -146,7 +146,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         .from('messages')
         .select(`
           *,
-          profiles (
+          profiles!messages_sender_id_fkey (
             id,
             username,
             profile_picture_url
@@ -204,7 +204,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         })
         .select(`
           *,
-          profiles (
+          profiles!messages_sender_id_fkey (
             id,
             username,
             profile_picture_url
