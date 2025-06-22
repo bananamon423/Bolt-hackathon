@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase, Message } from '../lib/supabase';
 
 type Profile = {
@@ -11,18 +11,65 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const subscriptionRef = useRef<any>(null);
-  const lastMessageIdRef = useRef<number | null>(null);
   const chatIdRef = useRef<string | undefined>(chatId);
+  const processedMessageIds = useRef<Set<number>>(new Set());
 
   // Update chat ID ref when it changes
   useEffect(() => {
     chatIdRef.current = chatId;
+    // Clear processed messages when switching chats
+    processedMessageIds.current.clear();
   }, [chatId]);
+
+  // Memoized function to add a message to the state
+  const addMessageToState = useCallback((newMessage: Message) => {
+    // Avoid duplicates using the processed IDs set
+    if (processedMessageIds.current.has(newMessage.id)) {
+      console.log('🚫 Message already processed:', newMessage.id);
+      return;
+    }
+
+    processedMessageIds.current.add(newMessage.id);
+    
+    setMessages(currentMessages => {
+      // Double-check for duplicates in current state
+      const exists = currentMessages.some(m => m.id === newMessage.id);
+      if (exists) {
+        console.log('🚫 Message already exists in state:', newMessage.id);
+        return currentMessages;
+      }
+
+      console.log('✅ Adding new message to state:', newMessage.id);
+      
+      // Add new message and sort by timestamp
+      const newMessages = [...currentMessages, newMessage];
+      return newMessages.sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    });
+  }, []);
+
+  // Memoized function to update a message in the state
+  const updateMessageInState = useCallback((updatedMessage: Message) => {
+    setMessages(currentMessages => {
+      const messageExists = currentMessages.some(m => m.id === updatedMessage.id);
+      if (!messageExists) {
+        console.log('🚫 Message to update not found in state:', updatedMessage.id);
+        return currentMessages;
+      }
+
+      console.log('✅ Updating message in state:', updatedMessage.id);
+      return currentMessages.map(m => 
+        m.id === updatedMessage.id ? updatedMessage : m
+      );
+    });
+  }, []);
 
   useEffect(() => {
     if (!chatId) {
       setMessages([]);
       setLoading(false);
+      cleanupSubscription();
       return;
     }
 
@@ -34,15 +81,15 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     };
   }, [chatId]);
 
-  const cleanupSubscription = () => {
+  const cleanupSubscription = useCallback(() => {
     if (subscriptionRef.current) {
       console.log('🧹 Cleaning up subscription for chat:', chatIdRef.current);
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
     }
-  };
+  }, []);
 
-  const setupRealtimeSubscription = () => {
+  const setupRealtimeSubscription = useCallback(() => {
     if (!chatId) return;
 
     // Clean up any existing subscription
@@ -51,7 +98,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     console.log('📡 Setting up real-time subscription for chat:', chatId);
 
     // Create subscription with a unique channel name
-    const channelName = `messages_${chatId}_${Date.now()}`;
+    const channelName = `messages_${chatId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const channel = supabase.channel(channelName, {
       config: {
         broadcast: { self: true },
@@ -93,7 +140,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           console.log('✅ Successfully subscribed to real-time messages for chat:', chatId);
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Channel subscription error for chat:', chatId);
-          // Retry subscription after a delay
+          // Retry subscription after a delay, but only if we're still on the same chat
           setTimeout(() => {
             if (chatIdRef.current === chatId) {
               console.log('🔄 Retrying subscription...');
@@ -102,31 +149,25 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           }, 2000);
         } else if (status === 'TIMED_OUT') {
           console.error('⏰ Subscription timed out for chat:', chatId);
-          // Retry subscription
+          // Retry subscription, but only if we're still on the same chat
           setTimeout(() => {
             if (chatIdRef.current === chatId) {
               console.log('🔄 Retrying subscription after timeout...');
               setupRealtimeSubscription();
             }
           }, 1000);
+        } else if (status === 'CLOSED') {
+          console.log('🔒 Subscription closed for chat:', chatId);
         }
       });
-  };
+  }, [chatId, cleanupSubscription]);
 
-  const handleRealtimeMessage = async (newMessage: any) => {
+  const handleRealtimeMessage = useCallback(async (newMessage: any) => {
     // Only process if this is for the current chat
     if (newMessage.chat_id !== chatIdRef.current) {
-      console.log('🚫 Ignoring message for different chat');
+      console.log('🚫 Ignoring message for different chat:', newMessage.chat_id, 'vs', chatIdRef.current);
       return;
     }
-
-    // Avoid duplicate processing
-    if (lastMessageIdRef.current === newMessage.id) {
-      console.log('🚫 Duplicate message, skipping');
-      return;
-    }
-    
-    lastMessageIdRef.current = newMessage.id;
 
     try {
       // Fetch complete message with profile data
@@ -149,32 +190,17 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       }
 
       if (fullMessage) {
-        console.log('✅ Adding new message to UI:', fullMessage.id);
-        
-        setMessages(currentMessages => {
-          // Check if message already exists
-          const exists = currentMessages.some(m => m.id === fullMessage.id);
-          if (exists) {
-            console.log('🚫 Message already exists, skipping');
-            return currentMessages;
-          }
-
-          // Add new message and sort by timestamp
-          const newMessages = [...currentMessages, fullMessage];
-          return newMessages.sort((a, b) => 
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
-        });
+        addMessageToState(fullMessage);
       }
     } catch (err) {
       console.error('❌ Error processing real-time message:', err);
     }
-  };
+  }, [addMessageToState]);
 
-  const handleRealtimeUpdate = async (updatedMessage: any) => {
+  const handleRealtimeUpdate = useCallback(async (updatedMessage: any) => {
     // Only process if this is for the current chat
     if (updatedMessage.chat_id !== chatIdRef.current) {
-      console.log('🚫 Ignoring update for different chat');
+      console.log('🚫 Ignoring update for different chat:', updatedMessage.chat_id, 'vs', chatIdRef.current);
       return;
     }
 
@@ -199,18 +225,12 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       }
 
       if (fullMessage) {
-        console.log('✅ Updating message in UI:', fullMessage.id);
-        
-        setMessages(currentMessages => {
-          return currentMessages.map(m => 
-            m.id === fullMessage.id ? fullMessage : m
-          );
-        });
+        updateMessageInState(fullMessage);
       }
     } catch (err) {
       console.error('❌ Error processing real-time update:', err);
     }
-  };
+  }, [updateMessageInState]);
 
   const fetchMessages = async () => {
     if (!chatId) return;
@@ -235,12 +255,14 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       if (error) throw error;
       
       console.log('📥 Fetched', data?.length || 0, 'messages');
-      setMessages(data || []);
       
-      // Update last message ID reference
-      if (data && data.length > 0) {
-        lastMessageIdRef.current = data[data.length - 1].id;
+      // Clear processed messages and rebuild the set
+      processedMessageIds.current.clear();
+      if (data) {
+        data.forEach(message => processedMessageIds.current.add(message.id));
       }
+      
+      setMessages(data || []);
     } catch (error) {
       console.error('❌ Error fetching messages:', error);
     } finally {
@@ -279,6 +301,11 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       }
 
       console.log('✅ Message sent successfully:', insertedMessage.id);
+      
+      // The message should appear via real-time subscription
+      // But add it immediately for better UX (will be deduplicated if needed)
+      addMessageToState(insertedMessage);
+      
       return insertedMessage;
     } catch (error) {
       console.error('❌ Error sending message:', error);
