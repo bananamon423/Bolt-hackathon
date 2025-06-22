@@ -4,6 +4,7 @@ import { supabase, Chat, Message, ChatMember } from '../lib/supabase';
 export function useChats(userId: string | undefined) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -146,6 +147,45 @@ export function useChats(userId: string | undefined) {
     }
   };
 
+  const deleteChat = async (chatId: string) => {
+    if (!userId) return false;
+
+    setDeletingChatId(chatId);
+    
+    try {
+      console.log('🗑️ Deleting chat:', chatId);
+      
+      const { data, error } = await supabase.rpc('delete_chat', {
+        p_chat_id: chatId
+      });
+
+      if (error) {
+        console.error('❌ Error deleting chat:', error);
+        throw new Error(error.message);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to delete chat');
+      }
+
+      console.log('✅ Chat deleted successfully:', data);
+      
+      // Remove chat from local state immediately
+      setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      throw error;
+    } finally {
+      setDeletingChatId(null);
+    }
+  };
+
+  const canDeleteChat = (chat: Chat) => {
+    return chat.owner_id === userId;
+  };
+
   const joinChatByShareLink = async (shareLink: string) => {
     if (!userId) return null;
 
@@ -153,7 +193,7 @@ export function useChats(userId: string | undefined) {
       console.log('🚪 Joining chat by share link:', shareLink);
       
       const { data, error } = await supabase.rpc('join_chat_by_share_link', {
-        share_link_uuid: shareLink
+        p_share_link_uuid: shareLink
       });
 
       if (error) {
@@ -180,7 +220,10 @@ export function useChats(userId: string | undefined) {
     loading,
     createChat,
     updateChatTitle,
+    deleteChat,
+    canDeleteChat,
     joinChatByShareLink,
     refetch: fetchChats,
+    deletingChatId,
   };
 }

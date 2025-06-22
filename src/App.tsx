@@ -34,7 +34,7 @@ function MainApp() {
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [thinkingModelName, setThinkingModelName] = useState<string>('');
 
-  const { chats, loading: chatsLoading, createChat, updateChatTitle } = useChats(user?.id);
+  const { chats, loading: chatsLoading, createChat, updateChatTitle, deleteChat, canDeleteChat, deletingChatId } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
@@ -71,6 +71,13 @@ function MainApp() {
     }
   }, [chats, currentChat, location.state]);
 
+  // If current chat is deleted, select another chat
+  useEffect(() => {
+    if (currentChat && !chats.find(chat => chat.id === currentChat.id)) {
+      setCurrentChat(chats.length > 0 ? chats[0] : null);
+    }
+  }, [chats, currentChat]);
+
   const handleNewChat = async () => {
     const newChat = await createChat();
     if (newChat) {
@@ -85,6 +92,16 @@ function MainApp() {
   const handleUpdateTitle = async (title: string) => {
     if (currentChat) {
       await updateChatTitle(currentChat.id, title);
+    }
+  };
+
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      await deleteChat(chatId);
+      // If we deleted the current chat, the useEffect above will handle selecting a new one
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+      throw error;
     }
   };
 
@@ -183,10 +200,13 @@ function MainApp() {
         onChatSelect={handleChatSelect}
         onNewChat={handleNewChat}
         onSignOut={signOut}
+        onDeleteChat={handleDeleteChat}
+        canDeleteChat={canDeleteChat}
         profile={profile}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onlineUsers={onlineUsers}
+        deletingChatId={deletingChatId}
       />
 
       {/* Main Chat Area */}
