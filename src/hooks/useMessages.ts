@@ -13,12 +13,14 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const subscriptionRef = useRef<any>(null);
   const chatIdRef = useRef<string | undefined>(chatId);
   const processedMessageIds = useRef<Set<number>>(new Set());
+  const isInitialLoad = useRef(true);
 
   // Update chat ID ref when it changes
   useEffect(() => {
     chatIdRef.current = chatId;
     // Clear processed messages when switching chats
     processedMessageIds.current.clear();
+    isInitialLoad.current = true;
   }, [chatId]);
 
   // Memoized function to add a message to the state
@@ -102,7 +104,8 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     const channel = supabase.channel(channelName, {
       config: {
         broadcast: { self: true },
-        presence: { key: 'user_id' }
+        presence: { key: 'user_id' },
+        private: false
       }
     });
 
@@ -117,6 +120,19 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         },
         async (payload) => {
           console.log('🔥 Real-time INSERT received:', payload);
+          
+          // Only process if this is for the current chat
+          if (payload.new.chat_id !== chatIdRef.current) {
+            console.log('🚫 Ignoring message for different chat');
+            return;
+          }
+
+          // Skip if this is the initial load to prevent duplicates
+          if (isInitialLoad.current) {
+            console.log('🚫 Skipping real-time message during initial load');
+            return;
+          }
+
           await handleRealtimeMessage(payload.new);
         }
       )
@@ -130,6 +146,13 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         },
         async (payload) => {
           console.log('🔄 Real-time UPDATE received:', payload);
+          
+          // Only process if this is for the current chat
+          if (payload.new.chat_id !== chatIdRef.current) {
+            console.log('🚫 Ignoring update for different chat');
+            return;
+          }
+
           await handleRealtimeUpdate(payload.new);
         }
       )
@@ -138,6 +161,10 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         
         if (status === 'SUBSCRIBED') {
           console.log('✅ Successfully subscribed to real-time messages for chat:', chatId);
+          // Mark initial load as complete after subscription is established
+          setTimeout(() => {
+            isInitialLoad.current = false;
+          }, 1000);
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Channel subscription error for chat:', chatId);
           // Retry subscription after a delay, but only if we're still on the same chat
@@ -163,12 +190,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   }, [chatId, cleanupSubscription]);
 
   const handleRealtimeMessage = useCallback(async (newMessage: any) => {
-    // Only process if this is for the current chat
-    if (newMessage.chat_id !== chatIdRef.current) {
-      console.log('🚫 Ignoring message for different chat:', newMessage.chat_id, 'vs', chatIdRef.current);
-      return;
-    }
-
     try {
       // Fetch complete message with profile data
       const { data: fullMessage, error } = await supabase
@@ -198,12 +219,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   }, [addMessageToState]);
 
   const handleRealtimeUpdate = useCallback(async (updatedMessage: any) => {
-    // Only process if this is for the current chat
-    if (updatedMessage.chat_id !== chatIdRef.current) {
-      console.log('🚫 Ignoring update for different chat:', updatedMessage.chat_id, 'vs', chatIdRef.current);
-      return;
-    }
-
     try {
       // Fetch complete updated message with profile data
       const { data: fullMessage, error } = await supabase

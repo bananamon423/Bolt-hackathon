@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Edit3, Check, X, ChevronDown, Share2, Copy, ExternalLink } from 'lucide-react';
 import { Chat, LLMModel } from '../lib/supabase';
 import { LastUsedLLMIndicator } from './LastUsedLLMIndicator';
+import { RealtimeStatus } from './RealtimeStatus';
 
 interface ChatHeaderProps {
   chat: Chat | null;
@@ -122,6 +123,9 @@ export function ChatHeader({
               <span>{onlineUsers.length} online</span>
             </div>
           )}
+
+          {/* Real-time Status */}
+          <RealtimeStatus className="hidden lg:flex" />
         </div>
 
         <div className="flex items-center gap-3">

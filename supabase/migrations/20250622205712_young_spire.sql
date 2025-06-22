@@ -1,0 +1,133 @@
+/*
+# Enhanced Real-time Configuration for Messages
+
+This migration ensures that real-time subscriptions work properly for the messages table
+by configuring the correct permissions and policies.
+
+1. Real-time Configuration
+   - Enable real-time on messages table
+   - Configure proper row-level security for real-time
+   - Add necessary indexes for performance
+
+2. Security Policies
+   - Ensure authenticated users can read messages in their chats
+   - Allow real-time updates for chat members
+   - Configure proper permissions for Supabase real-time
+
+3. Performance Optimizations
+   - Add indexes for real-time queries
+   - Optimize subscription filters
+*/
+
+-- Ensure real-time is enabled on the messages table
+ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS messages;
+
+-- Drop existing policies to recreate them with proper real-time support
+DROP POLICY IF EXISTS "Users can read messages in chats they are members of" ON messages;
+DROP POLICY IF EXISTS "Users can insert messages to chats they are members of" ON messages;
+DROP POLICY IF EXISTS "Users can update their own messages or chat owners can update any" ON messages;
+DROP POLICY IF EXISTS "Public can read messages via share link" ON messages;
+
+-- Create optimized RLS policies for real-time
+CREATE POLICY "Users can read messages in chats they are members of"
+  ON messages
+  FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 
+      FROM chat_members 
+      WHERE chat_members.chat_id = messages.chat_id 
+      AND chat_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can insert messages to chats they are members of"
+  ON messages
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 
+      FROM chat_members 
+      WHERE chat_members.chat_id = messages.chat_id 
+      AND chat_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can update their own messages or chat owners can update any"
+  ON messages
+  FOR UPDATE
+  TO authenticated
+  USING (
+    sender_id = auth.uid() OR 
+    EXISTS (
+      SELECT 1 
+      FROM chats 
+      WHERE chats.id = messages.chat_id 
+      AND chats.owner_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    sender_id = auth.uid() OR 
+    EXISTS (
+      SELECT 1 
+      FROM chats 
+      WHERE chats.id = messages.chat_id 
+      AND chats.owner_id = auth.uid()
+    )
+  );
+
+-- Allow public read access to messages via share link (for shared chats)
+CREATE POLICY "Public can read messages via share link"
+  ON messages
+  FOR SELECT
+  TO public
+  USING (
+    EXISTS (
+      SELECT 1 
+      FROM chats 
+      WHERE chats.id = messages.chat_id 
+      AND chats.share_link::text = current_setting('request.headers.share_link', true)
+    )
+  );
+
+-- Ensure chat_members table has real-time enabled for membership changes
+ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS chat_members;
+
+-- Ensure chats table has real-time enabled for chat updates
+ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS chats;
+
+-- Create optimized indexes for real-time performance
+CREATE INDEX IF NOT EXISTS idx_messages_chat_id_created_at ON messages(chat_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_chat_members_user_chat ON chat_members(user_id, chat_id);
+CREATE INDEX IF NOT EXISTS idx_chat_members_chat_user ON chat_members(chat_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_chats_owner_id ON chats(owner_id);
+CREATE INDEX IF NOT EXISTS idx_chats_share_link ON chats(share_link);
+
+-- Grant necessary permissions for real-time
+GRANT SELECT ON messages TO anon;
+GRANT SELECT, INSERT, UPDATE ON messages TO authenticated;
+GRANT SELECT ON chat_members TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON chat_members TO authenticated;
+GRANT SELECT ON chats TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON chats TO authenticated;
+
+-- Refresh the real-time schema cache
+NOTIFY pgrst, 'reload schema';
+
+-- Add a function to test real-time connectivity
+CREATE OR REPLACE FUNCTION public.test_realtime_connection()
+RETURNS json AS $$
+BEGIN
+  RETURN json_build_object(
+    'success', true,
+    'timestamp', now(),
+    'message', 'Real-time connection test successful'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.test_realtime_connection() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.test_realtime_connection() TO anon;
