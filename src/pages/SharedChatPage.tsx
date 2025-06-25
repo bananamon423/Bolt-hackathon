@@ -9,6 +9,7 @@ import { AuthForm } from '../components/AuthForm';
 import { ChatHeader } from '../components/ChatHeader';
 import { MessageList } from '../components/MessageList';
 import { MessageInput } from '../components/MessageInput';
+import { UserPresenceIndicator } from '../components/UserPresenceIndicator';
 import { LLMModel } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 
@@ -279,12 +280,8 @@ export function SharedChatPage() {
             </div>
           </div>
           
-          {onlineUsers.length > 0 && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>{onlineUsers.length} online</span>
-            </div>
-          )}
+          {/* User Presence Indicator */}
+          <UserPresenceIndicator onlineUsers={onlineUsers} />
         </div>
       </div>
 
