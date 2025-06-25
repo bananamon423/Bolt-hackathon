@@ -13,15 +13,6 @@ import { UserPresenceIndicator } from '../components/UserPresenceIndicator';
 import { LLMModel } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 
-// Define Gwiz as a special hardcoded model
-const GWIZ_MODEL: LLMModel = {
-  id: 'gwiz-hardcoded',
-  model_name: 'Gwiz',
-  api_identifier: 'google/gemini-1.5-flash',
-  cost_per_token: 1,
-  is_active: true
-};
-
 export function SharedChatPage() {
   const { user, profile, loading, signIn, signUp, refreshProfile } = useAuth();
   const { shareLink, chat, loading: chatLoading, error, hasJoined, isJoining, joinChat, checkMembership, setError } = useSharedChat();
@@ -35,16 +26,18 @@ export function SharedChatPage() {
   const { models } = useModels();
   const onlineUsers = usePresence(chat?.id, user?.id);
 
-  // Combine Gwiz with other models
-  const allModels = [
-    GWIZ_MODEL, 
-    ...models.filter(model => model.id !== 'gwiz-hardcoded' && model.model_name !== 'Gwiz')
-  ];
+  // Use models directly from the database
+  const allModels = models;
 
-  // Set default model
+  // Set default model (prefer Gwiz by api_identifier)
   useEffect(() => {
     if (allModels.length > 0 && !selectedModel) {
-      setSelectedModel(GWIZ_MODEL);
+      // Try to find Gwiz by api_identifier first
+      const gwizModel = allModels.find(model => 
+        model.api_identifier === 'google/gemini-1.5-flash' || 
+        model.model_name.toLowerCase() === 'gwiz'
+      );
+      setSelectedModel(gwizModel || allModels[0]);
     }
   }, [allModels, selectedModel]);
 

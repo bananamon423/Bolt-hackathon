@@ -40,40 +40,37 @@ export function useMentions({
   const getAllMentionOptions = (): MentionOption[] => {
     const options: MentionOption[] = [];
 
-    // *** CRITICAL: Add Gwiz as the FIRST option ***
-    if (creditsBalance > 0) {
-      options.push({
-        id: 'gwiz-hardcoded',
-        type: 'ai',
-        name: 'Gwiz',
-        displayName: 'Gwiz',
-        description: 'Original AI Assistant (Gemini) • 1 credit',
-        icon: '🤖',
-        color: 'from-purple-500 to-pink-500',
-        cost: 1
-      });
-    }
-
-    // Add AI models from database (OpenRouter models) - EXCLUDE Gwiz to prevent duplicates
+    // Add AI models from database - use actual model data
     availableModels.forEach(model => {
-      // Skip if this is the Gwiz model to prevent duplicates
-      if (model.id === 'gwiz-hardcoded' || model.model_name === 'Gwiz') {
-        return;
-      }
-
-      const modelConfig = OPENROUTER_MODELS[model.api_identifier as OpenRouterModelId];
-      if (modelConfig && creditsBalance >= model.cost_per_token) {
-        options.push({
-          id: model.id,
-          type: 'ai',
-          name: model.api_identifier,
-          displayName: modelConfig.name,
-          description: `${modelConfig.description} • ${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
-          modelId: model.api_identifier as OpenRouterModelId,
-          icon: modelConfig.icon,
-          color: modelConfig.color,
-          cost: model.cost_per_token
-        });
+      if (creditsBalance >= model.cost_per_token) {
+        const modelConfig = OPENROUTER_MODELS[model.api_identifier as OpenRouterModelId];
+        
+        // For models with OpenRouter config, use that info
+        if (modelConfig) {
+          options.push({
+            id: model.id, // Use actual UUID from database
+            type: 'ai',
+            name: model.model_name, // Use model_name for matching
+            displayName: modelConfig.name,
+            description: `${modelConfig.description} • ${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
+            modelId: model.api_identifier as OpenRouterModelId,
+            icon: modelConfig.icon,
+            color: modelConfig.color,
+            cost: model.cost_per_token
+          });
+        } else {
+          // For models without OpenRouter config (like Gwiz), use basic info
+          options.push({
+            id: model.id, // Use actual UUID from database
+            type: 'ai',
+            name: model.model_name, // Use model_name for matching
+            displayName: model.model_name,
+            description: `${model.model_name} • ${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
+            icon: '🤖',
+            color: 'from-purple-500 to-pink-500',
+            cost: model.cost_per_token
+          });
+        }
       }
     });
 
@@ -237,9 +234,9 @@ export function useMentions({
     if (mentionMatch) {
       const beforeMention = beforeCursor.substring(0, mentionMatch.index);
       
-      // *** CRITICAL: Use the exact name for Gwiz ***
+      // Use the model name for AI mentions
       const mentionText = option.type === 'ai' 
-        ? `@${option.name} `  // Use option.name (which is 'Gwiz' for our hardcoded option)
+        ? `@${option.name} `  // Use option.name (which is model_name from database)
         : `@${option.name} `;
       
       const newText = beforeMention + mentionText + afterCursor;
@@ -253,8 +250,8 @@ export function useMentions({
         newCursorPosition,
         isAIMention: option.type === 'ai',
         selectedModel: option.type === 'ai' ? {
-          id: option.id,
-          name: option.name, // This will be 'Gwiz' for our hardcoded option
+          id: option.id, // This is now the actual UUID from database
+          name: option.name, // This is the model_name from database
           apiIdentifier: option.modelId || option.name,
           cost: option.cost || 1
         } : null

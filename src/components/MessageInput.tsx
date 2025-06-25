@@ -48,23 +48,10 @@ export function MessageInput({
     availableModels 
   });
 
-  // Enhanced AI mention detection - FIXED VERSION
+  // Enhanced AI mention detection - uses database models only
   const getAIMentionFromMessage = (text: string) => {
     console.log('🔍 Analyzing message for AI mentions:', text);
     
-    // First, check for @Gwiz (case-insensitive, exact match)
-    const gwizMatch = text.match(/@gwiz\b/i);
-    if (gwizMatch) {
-      console.log('✅ Found @Gwiz mention');
-      return {
-        id: 'gwiz-hardcoded',
-        name: 'Gwiz',
-        apiIdentifier: 'google/gemini-1.5-flash',
-        cost: 1
-      };
-    }
-
-    // Then check for other AI models from database
     // Look for @modelName patterns
     const mentionMatches = text.match(/@(\w+(?:[.\-/]\w+)*)/g);
     if (mentionMatches) {
@@ -99,7 +86,7 @@ export function MessageInput({
         if (matchedModel) {
           console.log('✅ Found matching model:', matchedModel);
           return {
-            id: matchedModel.id,
+            id: matchedModel.id, // Use the actual UUID from database
             name: matchedModel.model_name,
             apiIdentifier: matchedModel.api_identifier,
             cost: matchedModel.cost_per_token
@@ -203,17 +190,12 @@ export function MessageInput({
         let aiMessage = trimmedMessage;
         
         // Remove the mention from the message
-        if (currentAIMention.name === 'Gwiz') {
-          aiMessage = trimmedMessage.replace(/@gwiz\b/gi, '').trim();
-        } else {
-          // For other models, remove the mention pattern
-          const mentionPattern = new RegExp(`@${currentAIMention.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-          aiMessage = trimmedMessage.replace(mentionPattern, '').trim();
-          
-          // Also try removing by API identifier if the mention was that
-          const apiPattern = new RegExp(`@${currentAIMention.apiIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-          aiMessage = aiMessage.replace(apiPattern, '').trim();
-        }
+        const mentionPattern = new RegExp(`@${currentAIMention.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        aiMessage = trimmedMessage.replace(mentionPattern, '').trim();
+        
+        // Also try removing by API identifier if the mention was that
+        const apiPattern = new RegExp(`@${currentAIMention.apiIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        aiMessage = aiMessage.replace(apiPattern, '').trim();
         
         // First send the user message with the mention
         onSendMessage(trimmedMessage);
@@ -259,9 +241,14 @@ export function MessageInput({
 
   const handleQuickAIClick = async () => {
     if (!message.trim() || disabled || isLoading || isSending) {
-      // If no message, insert default AI mention
+      // If no message, insert default AI mention (prefer Gwiz)
       if (!message.trim() && availableModels.length > 0) {
-        const defaultModel = availableModels[0];
+        // Try to find Gwiz first, otherwise use first model
+        const defaultModel = availableModels.find(model => 
+          model.api_identifier === 'google/gemini-1.5-flash' || 
+          model.model_name.toLowerCase() === 'gwiz'
+        ) || availableModels[0];
+        
         const newMessage = `@${defaultModel.model_name} `;
         setMessage(newMessage);
         if (textareaRef.current) {
@@ -274,8 +261,12 @@ export function MessageInput({
       return;
     }
 
-    // Use the first available model as default
-    const defaultModel = availableModels[0];
+    // Use the preferred model (Gwiz if available, otherwise first model)
+    const defaultModel = availableModels.find(model => 
+      model.api_identifier === 'google/gemini-1.5-flash' || 
+      model.model_name.toLowerCase() === 'gwiz'
+    ) || availableModels[0];
+    
     if (!defaultModel) return;
 
     if (creditsBalance < defaultModel.cost_per_token) {
