@@ -14,17 +14,19 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const chatIdRef = useRef<string | undefined>(chatId);
   const processedMessageIds = useRef<Set<number>>(new Set());
   const isInitialLoad = useRef(true);
+  const pendingMessages = useRef<Map<string, Message>>(new Map());
 
   // Update chat ID ref when it changes
   useEffect(() => {
     chatIdRef.current = chatId;
     // Clear processed messages when switching chats
     processedMessageIds.current.clear();
+    pendingMessages.current.clear();
     isInitialLoad.current = true;
   }, [chatId]);
 
   // Memoized function to add a message to the state
-  const addMessageToState = useCallback((newMessage: Message) => {
+  const addMessageToState = useCallback((newMessage: Message, isOptimistic = false) => {
     // Avoid duplicates using the processed IDs set
     if (processedMessageIds.current.has(newMessage.id)) {
       console.log('🚫 Message already processed:', newMessage.id);
@@ -41,7 +43,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         return currentMessages;
       }
 
-      console.log('✅ Adding new message to state:', newMessage.id);
+      console.log('✅ Adding new message to state:', newMessage.id, isOptimistic ? '(optimistic)' : '(confirmed)');
       
       // Add new message and sort by timestamp
       const newMessages = [...currentMessages, newMessage];
@@ -65,6 +67,54 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         m.id === updatedMessage.id ? updatedMessage : m
       );
     });
+  }, []);
+
+  // Function to add optimistic message
+  const addOptimisticMessage = useCallback((content: string, userId: string) => {
+    if (!chatId || !currentUser) return null;
+
+    const optimisticMessage: Message = {
+      id: Date.now(), // Temporary ID
+      chat_id: chatId,
+      sender_id: userId,
+      sender_type: 'user',
+      content: content.trim(),
+      model_id: null,
+      token_cost: null,
+      created_at: new Date().toISOString(),
+      profiles: currentUser,
+      message_type: 'USER_TO_USER'
+    };
+
+    // Store as pending
+    const tempId = `temp_${Date.now()}`;
+    pendingMessages.current.set(tempId, optimisticMessage);
+
+    // Add to UI immediately
+    addMessageToState(optimisticMessage, true);
+    
+    return { optimisticMessage, tempId };
+  }, [chatId, currentUser, addMessageToState]);
+
+  // Function to replace optimistic message with real one
+  const replaceOptimisticMessage = useCallback((tempId: string, realMessage: Message) => {
+    const optimisticMessage = pendingMessages.current.get(tempId);
+    if (optimisticMessage) {
+      pendingMessages.current.delete(tempId);
+      
+      setMessages(currentMessages => {
+        // Remove optimistic message and add real one
+        const withoutOptimistic = currentMessages.filter(m => m.id !== optimisticMessage.id);
+        const withReal = [...withoutOptimistic, realMessage];
+        
+        // Mark real message as processed
+        processedMessageIds.current.add(realMessage.id);
+        
+        return withReal.sort((a, b) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -103,7 +153,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     const channelName = `messages_${chatId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const channel = supabase.channel(channelName, {
       config: {
-        broadcast: { self: true },
+        broadcast: { self: false }, // Don't receive our own broadcasts
         presence: { key: 'user_id' },
         private: false
       }
@@ -164,7 +214,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           // Mark initial load as complete after subscription is established
           setTimeout(() => {
             isInitialLoad.current = false;
-          }, 1000);
+          }, 500); // Reduced timeout
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Channel subscription error for chat:', chatId);
           // Retry subscription after a delay, but only if we're still on the same chat
@@ -273,6 +323,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       
       // Clear processed messages and rebuild the set
       processedMessageIds.current.clear();
+      pendingMessages.current.clear();
       if (data) {
         data.forEach(message => processedMessageIds.current.add(message.id));
       }
@@ -289,6 +340,10 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     if (!chatId || !content.trim() || !currentUser) return null;
 
     console.log('📤 Sending message:', content);
+
+    // Add optimistic message immediately
+    const optimistic = addOptimisticMessage(content, userId);
+    if (!optimistic) return null;
 
     try {
       const { data: insertedMessage, error } = await supabase
@@ -312,13 +367,17 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       if (error) {
         console.error('❌ Error sending message:', error);
+        // Remove optimistic message on error
+        setMessages(currentMessages => 
+          currentMessages.filter(m => m.id !== optimistic.optimisticMessage.id)
+        );
         throw error;
       }
 
       console.log('✅ Message sent successfully:', insertedMessage.id);
       
-      // The real-time subscription will handle adding the message to the UI
-      // This ensures all users see the message at the same time
+      // Replace optimistic message with real one
+      replaceOptimisticMessage(optimistic.tempId, insertedMessage);
       
       return insertedMessage;
     } catch (error) {

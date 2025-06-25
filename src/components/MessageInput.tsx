@@ -31,6 +31,7 @@ export function MessageInput({
     cost: number;
   } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isSending, setIsSending] = useState(false);
 
   const {
     showDropdown,
@@ -174,7 +175,7 @@ export function MessageInput({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || disabled || isLoading) return;
+    if (!message.trim() || disabled || isLoading || isSending) return;
 
     const trimmedMessage = message.trim();
     const currentAIMention = getAIMentionFromMessage(trimmedMessage);
@@ -185,15 +186,19 @@ export function MessageInput({
       isAIMessage: !!currentAIMention
     });
 
-    if (currentAIMention) {
-      if (creditsBalance < currentAIMention.cost) {
-        setShowCreditsWarning(true);
-        setTimeout(() => setShowCreditsWarning(false), 3000);
-        return;
-      }
+    // Prevent double sending
+    setIsSending(true);
 
-      setIsLoading(true);
-      try {
+    try {
+      if (currentAIMention) {
+        if (creditsBalance < currentAIMention.cost) {
+          setShowCreditsWarning(true);
+          setTimeout(() => setShowCreditsWarning(false), 3000);
+          return;
+        }
+
+        setIsLoading(true);
+        
         // Extract the actual message content (remove the @mention)
         let aiMessage = trimmedMessage;
         
@@ -213,6 +218,10 @@ export function MessageInput({
         // First send the user message with the mention
         onSendMessage(trimmedMessage);
         
+        // Clear input immediately after sending user message
+        setMessage('');
+        setSelectedAIModel(null);
+        
         // Then send to AI with timeout
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Request timeout')), 30000)
@@ -230,26 +239,26 @@ export function MessageInput({
           timeoutPromise
         ]);
         
+      } else {
+        // Regular user message
+        onSendMessage(trimmedMessage);
         setMessage('');
-        setSelectedAIModel(null);
-      } catch (error) {
-        console.error('AI message failed:', error);
-        if (error.message.includes('timeout')) {
-          alert('AI response is taking longer than expected. Please try again.');
-        } else {
-          alert('Failed to get AI response. Please try again.');
-        }
-      } finally {
-        setIsLoading(false);
       }
-    } else {
-      onSendMessage(trimmedMessage);
-      setMessage('');
+    } catch (error) {
+      console.error('Message sending failed:', error);
+      if (error.message.includes('timeout')) {
+        alert('AI response is taking longer than expected. Please try again.');
+      } else {
+        alert('Failed to send message. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+      setIsSending(false);
     }
   };
 
   const handleQuickAIClick = async () => {
-    if (!message.trim() || disabled || isLoading) {
+    if (!message.trim() || disabled || isLoading || isSending) {
       // If no message, insert default AI mention
       if (!message.trim() && availableModels.length > 0) {
         const defaultModel = availableModels[0];
@@ -278,6 +287,7 @@ export function MessageInput({
     const userMessage = message.trim();
     setMessage('');
     setIsLoading(true);
+    setIsSending(true);
     
     try {
       // Send user message first
@@ -299,6 +309,7 @@ export function MessageInput({
       }
     } finally {
       setIsLoading(false);
+      setIsSending(false);
     }
   };
 
@@ -346,14 +357,14 @@ export function MessageInput({
                 : "Type your message... (Use @ to mention AI models or users)"
             }
             className={`w-full resize-none rounded-lg px-4 py-3 focus:ring-2 focus:border-transparent transition-all duration-200 ${
-              disabled
+              disabled || isSending
                 ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'
                 : isAIMessage
                 ? 'border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 focus:ring-purple-500'
                 : 'border border-gray-300 bg-white focus:ring-blue-500'
             }`}
             rows={1}
-            disabled={disabled || isLoading}
+            disabled={disabled || isLoading || isSending}
             style={{
               minHeight: '44px',
               maxHeight: '120px',
@@ -379,33 +390,37 @@ export function MessageInput({
           <button
             type="button"
             onClick={handleQuickAIClick}
-            disabled={disabled || isLoading || (message.trim() && creditsBalance < 1)}
+            disabled={disabled || isLoading || isSending || (message.trim() && creditsBalance < 1)}
             className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 ${
               isAIMessage
                 ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 focus:ring-purple-500'
                 : 'bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 focus:ring-indigo-500'
             }`}
           >
-            {isLoading ? (
+            {isLoading || isSending ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <Bot className="w-4 h-4" />
             )}
             <span className="hidden sm:inline">
-              {isLoading ? 'Thinking...' : 'AI'}
+              {isLoading || isSending ? 'Sending...' : 'AI'}
             </span>
           </button>
           
           <button
             type="submit"
-            disabled={!message.trim() || disabled || isLoading}
+            disabled={!message.trim() || disabled || isLoading || isSending}
             className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 ${
               isAIMessage
                 ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 focus:ring-purple-500'
                 : 'bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 focus:ring-blue-500'
             }`}
           >
-            <Send className="w-4 h-4" />
+            {isSending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
           </button>
         </div>
       </form>
@@ -421,10 +436,10 @@ export function MessageInput({
         </span>
         <span className="flex items-center gap-2">
           <span>{creditsBalance} credits remaining</span>
-          {isLoading && (
+          {(isLoading || isSending) && (
             <div className="flex items-center gap-1 text-purple-600">
               <div className="w-3 h-3 border border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-              <span>AI thinking...</span>
+              <span>{isLoading ? 'AI thinking...' : 'Sending...'}</span>
             </div>
           )}
         </span>
