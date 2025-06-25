@@ -27,6 +27,7 @@ const GWIZ_MODEL: LLMModel = {
 function MainApp() {
   const location = useLocation();
   const { user, profile, loading, signIn, signUp, signOut, refreshProfile } = useAuth();
+  const [chatOwnerCreditsBalance, setChatOwnerCreditsBalance] = useState(0);
   
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
@@ -77,6 +78,25 @@ function MainApp() {
       setCurrentChat(chats.length > 0 ? chats[0] : null);
     }
   }, [chats, currentChat]);
+
+  // Fetch chat owner's credits when currentChat or profile changes
+  useEffect(() => {
+    const fetchOwnerCredits = async () => {
+      if (currentChat?.owner_id) {
+        try {
+          const { data, error } = await supabase.rpc('get_profile_credits', { p_user_id: currentChat.owner_id });
+          if (error) throw error;
+          setChatOwnerCreditsBalance(data);
+        } catch (error) {
+          console.error('Error fetching chat owner credits:', error);
+          setChatOwnerCreditsBalance(0); // Default to 0 on error
+        }
+      } else {
+        setChatOwnerCreditsBalance(profile?.credits_balance || 0); // Fallback to own credits if no chat selected
+      }
+    };
+    fetchOwnerCredits();
+  }, [currentChat, profile]); // Re-fetch when currentChat or profile changes
 
   const handleNewChat = async () => {
     const newChat = await createChat();
@@ -166,6 +186,18 @@ function MainApp() {
         
         // Refresh profile to update credits
         refreshProfile();
+        
+        // Also refresh chat owner credits
+        if (currentChat?.owner_id) {
+          try {
+            const { data, error } = await supabase.rpc('get_profile_credits', { p_user_id: currentChat.owner_id });
+            if (!error) {
+              setChatOwnerCreditsBalance(data);
+            }
+          } catch (error) {
+            console.error('Error refreshing chat owner credits:', error);
+          }
+        }
       } catch (error) {
         console.error('AI message error:', error);
         throw error;
@@ -233,7 +265,7 @@ function MainApp() {
             <MessageInput
               onSendMessage={handleSendMessage}
               onSendAIMessage={handleSendAIMessage}
-              creditsBalance={profile.credits_balance}
+              creditsBalance={chatOwnerCreditsBalance} // Pass chat owner's credits
               onlineUsers={onlineUsers}
               availableModels={allModels}
             />

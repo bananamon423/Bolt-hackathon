@@ -53,22 +53,6 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     });
   }, []);
 
-  // Memoized function to update a message in the state
-  const updateMessageInState = useCallback((updatedMessage: Message) => {
-    setMessages(currentMessages => {
-      const messageExists = currentMessages.some(m => m.id === updatedMessage.id);
-      if (!messageExists) {
-        console.log('🚫 Message to update not found in state:', updatedMessage.id);
-        return currentMessages;
-      }
-
-      console.log('✅ Updating message in state:', updatedMessage.id);
-      return currentMessages.map(m => 
-        m.id === updatedMessage.id ? updatedMessage : m
-      );
-    });
-  }, []);
-
   // Function to add optimistic message
   const addOptimisticMessage = useCallback((content: string, userId: string) => {
     if (!chatId || !currentUser) return null;
@@ -115,6 +99,22 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         );
       });
     }
+  }, []);
+
+  // Memoized function to update a message in the state
+  const updateMessageInState = useCallback((updatedMessage: Message) => {
+    setMessages(currentMessages => {
+      const messageExists = currentMessages.some(m => m.id === updatedMessage.id);
+      if (!messageExists) {
+        console.log('🚫 Message to update not found in state:', updatedMessage.id);
+        return currentMessages;
+      }
+
+      console.log('✅ Updating message in state:', updatedMessage.id);
+      return currentMessages.map(m => 
+        m.id === updatedMessage.id ? updatedMessage : m
+      );
+    });
   }, []);
 
   useEffect(() => {
@@ -402,35 +402,13 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw new Error('No auth token');
       }
 
-      // Enhanced routing logic
-      let functionToInvoke = '';
-      let functionPayload = {};
-
-      const isGwizModel = modelName === 'Gwiz' || modelId === 'gwiz-hardcoded';
-
-      console.log('🔄 Routing decision:', {
-        modelName,
+      // Call the new centralized ask-llm Edge Function
+      const functionToInvoke = 'ask-llm';
+      const functionPayload = {
+        chatId,
+        message: content,
         modelId,
-        isGwizModel
-      });
-
-      if (isGwizModel) {
-        console.log('🔄 ✅ ROUTING TO AI-CHAT FUNCTION FOR GWIZ');
-        functionToInvoke = 'ai-chat';
-        functionPayload = {
-          chatId,
-          message: content,
-          modelId,
-        };
-      } else {
-        console.log('🔄 ✅ ROUTING TO OPENROUTER-CHAT FUNCTION FOR:', modelName);
-        functionToInvoke = 'openrouter-chat';
-        functionPayload = {
-          chatId,
-          message: content,
-          modelId,
-        };
-      }
+      };
 
       console.log(`🔄 Calling ${functionToInvoke} function with payload:`, functionPayload);
 

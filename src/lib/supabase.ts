@@ -9,6 +9,20 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Extend SupabaseClient with custom RPC types
+declare module '@supabase/supabase-js' {
+  interface SupabaseClient {
+    rpc: {
+      (functionName: 'get_profile_credits', args: { p_user_id: string }): Promise<{ data: number; error: any }>;
+      (functionName: 'update_last_used_llm', args: { model_identifier: string }): Promise<{ data: any; error: any }>;
+      (functionName: 'delete_chat', args: { p_chat_id: string }): Promise<{ data: any; error: any }>;
+      (functionName: 'join_chat_by_share_link', args: { p_share_link_uuid: string }): Promise<{ data: any; error: any }>;
+      (functionName: 'delete_message', args: { p_message_id: number; p_reason: string }): Promise<{ data: any; error: any }>;
+      (functionName: 'test_realtime_connection'): Promise<{ data: any; error: any }>;
+    };
+  }
+}
+
 export type Profile = {
   id: string;
   username: string | null;
@@ -50,6 +64,10 @@ export type Message = {
   output_tokens?: number;
   cost_in_credits?: number;
   parent_prompt_id?: number;
+  // Deletion fields
+  deleted_at?: string | null;
+  delete_reason?: string | null;
+  deleted_by?: string | null;
 };
 
 export type LLMModel = {
