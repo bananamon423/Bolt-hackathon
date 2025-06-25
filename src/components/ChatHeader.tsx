@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Edit3, Check, X, ChevronDown, Share2, Copy, ExternalLink } from 'lucide-react';
 import { Chat, LLMModel } from '../lib/supabase';
-import { LastUsedLLMIndicator } from './LastUsedLLMIndicator';
 import { UserPresenceIndicator } from './UserPresenceIndicator';
 import { RealtimeStatus } from './RealtimeStatus';
 
@@ -12,6 +11,7 @@ interface ChatHeaderProps {
   onUpdateTitle: (title: string) => void;
   onModelChange: (model: LLMModel) => void;
   onlineUsers: string[];
+  currentUserId?: string;
 }
 
 export function ChatHeader({ 
@@ -20,7 +20,8 @@ export function ChatHeader({
   selectedModel, 
   onUpdateTitle, 
   onModelChange,
-  onlineUsers 
+  onlineUsers,
+  currentUserId
 }: ChatHeaderProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(chat?.chat_title || '');
@@ -125,6 +126,7 @@ export function ChatHeader({
           {/* User Presence Indicator - Replaces Last Used LLM */}
           <UserPresenceIndicator 
             onlineUsers={onlineUsers}
+            currentUserId={currentUserId}
             className="hidden lg:flex" 
           />
 

@@ -218,6 +218,7 @@ function MainApp() {
           onUpdateTitle={handleUpdateTitle}
           onModelChange={handleModelChange}
           onlineUsers={onlineUsers}
+          currentUserId={user.id}
         />
 
         {currentChat ? (

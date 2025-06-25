@@ -3,21 +3,29 @@ import { Users } from 'lucide-react';
 
 interface UserPresenceIndicatorProps {
   onlineUsers: string[];
+  currentUserId?: string;
   className?: string;
 }
 
-export function UserPresenceIndicator({ onlineUsers, className = '' }: UserPresenceIndicatorProps) {
-  if (onlineUsers.length === 0) {
+export function UserPresenceIndicator({ 
+  onlineUsers, 
+  currentUserId,
+  className = '' 
+}: UserPresenceIndicatorProps) {
+  // Filter out the current user from the online users list
+  const otherUsers = onlineUsers.filter(userId => userId !== currentUserId);
+  
+  if (otherUsers.length === 0) {
     return (
       <div className={`flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg ${className}`}>
         <Users className="w-4 h-4 text-gray-500" />
-        <span className="text-sm text-gray-600">No one online</span>
+        <span className="text-sm text-gray-600">Just you</span>
       </div>
     );
   }
 
-  const displayUsers = onlineUsers.slice(0, 3);
-  const remainingCount = onlineUsers.length - 3;
+  const displayUsers = otherUsers.slice(0, 3);
+  const remainingCount = otherUsers.length - 3;
 
   // Generate user initials and colors
   const getUserInitial = (userId: string) => {
@@ -53,7 +61,7 @@ export function UserPresenceIndicator({ onlineUsers, className = '' }: UserPrese
       <div className="flex items-center gap-1">
         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
         <span className="text-sm font-medium text-green-700">
-          {onlineUsers.length} online
+          {otherUsers.length === 1 ? '1 other' : `${otherUsers.length} others`}
         </span>
       </div>
       

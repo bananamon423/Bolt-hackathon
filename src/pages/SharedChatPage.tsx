@@ -281,7 +281,10 @@ export function SharedChatPage() {
           </div>
           
           {/* User Presence Indicator */}
-          <UserPresenceIndicator onlineUsers={onlineUsers} />
+          <UserPresenceIndicator 
+            onlineUsers={onlineUsers} 
+            currentUserId={user.id}
+          />
         </div>
       </div>
 
@@ -292,6 +295,7 @@ export function SharedChatPage() {
         onUpdateTitle={handleUpdateTitle}
         onModelChange={handleModelChange}
         onlineUsers={onlineUsers}
+        currentUserId={user.id}
       />
 
       <MessageList
