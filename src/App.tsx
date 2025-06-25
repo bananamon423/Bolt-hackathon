@@ -5,11 +5,14 @@ import { useChats } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
 import { useModels } from './hooks/useModels';
 import { usePresence } from './hooks/usePresence';
+import { useSubscription } from './hooks/useSubscription';
 import { AuthForm } from './components/AuthForm';
 import { ChatSidebar } from './components/ChatSidebar';
 import { ChatHeader } from './components/ChatHeader';
 import { MessageList } from './components/MessageList';
 import { MessageInput } from './components/MessageInput';
+import { SubscriptionManager } from './components/SubscriptionManager';
+import { TokenUsageIndicator } from './components/TokenUsageIndicator';
 import { AdminPage } from './pages/AdminPage';
 import { SharedChatPage } from './pages/SharedChatPage';
 import { Chat, LLMModel } from './lib/supabase';
@@ -27,13 +30,15 @@ const GWIZ_MODEL: LLMModel = {
 function MainApp() {
   const location = useLocation();
   const { user, profile, loading, signIn, signUp, signOut, refreshProfile } = useAuth();
-  const [chatOwnerCreditsBalance, setChatOwnerCreditsBalance] = useState(0);
+  const { subscription, loading: subscriptionLoading, refreshSubscription } = useSubscription(user?.id);
   
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [thinkingModelName, setThinkingModelName] = useState<string>('');
+  const [showSubscriptionManager, setShowSubscriptionManager] = useState(false);
+  const [chatOwnerTokens, setChatOwnerTokens] = useState(0);
 
   const { chats, loading: chatsLoading, createChat, updateChatTitle, deleteChat, canDeleteChat, deletingChatId } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
@@ -79,24 +84,29 @@ function MainApp() {
     }
   }, [chats, currentChat]);
 
-  // Fetch chat owner's credits when currentChat or profile changes
+  // Fetch chat owner's tokens when currentChat changes
   useEffect(() => {
-    const fetchOwnerCredits = async () => {
+    const fetchOwnerTokens = async () => {
       if (currentChat?.owner_id) {
         try {
-          const { data, error } = await supabase.rpc('get_profile_credits', { p_user_id: currentChat.owner_id });
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('tokens')
+            .eq('id', currentChat.owner_id)
+            .single();
+          
           if (error) throw error;
-          setChatOwnerCreditsBalance(data);
+          setChatOwnerTokens(data.tokens);
         } catch (error) {
-          console.error('Error fetching chat owner credits:', error);
-          setChatOwnerCreditsBalance(0); // Default to 0 on error
+          console.error('Error fetching chat owner tokens:', error);
+          setChatOwnerTokens(0);
         }
       } else {
-        setChatOwnerCreditsBalance(profile?.credits_balance || 0); // Fallback to own credits if no chat selected
+        setChatOwnerTokens(subscription?.tokens || 0);
       }
     };
-    fetchOwnerCredits();
-  }, [currentChat, profile]); // Re-fetch when currentChat or profile changes
+    fetchOwnerTokens();
+  }, [currentChat, subscription]);
 
   const handleNewChat = async () => {
     const newChat = await createChat();
@@ -153,6 +163,12 @@ function MainApp() {
 
   const handleSendAIMessage = async (content: string, modelId?: string, modelName?: string) => {
     if (user && currentChat) {
+      // Check if chat owner has tokens
+      if (chatOwnerTokens <= 0) {
+        alert('The chat owner has run out of tokens. Please upgrade to continue using AI features.');
+        return;
+      }
+
       // Set thinking state
       setIsAIThinking(true);
       setThinkingModelName(modelName || selectedModel?.model_name || 'AI');
@@ -172,7 +188,36 @@ function MainApp() {
           targetModelName
         });
 
-        await sendAIMessage(content, targetModelId, targetModelName);
+        // Call the token-based LLM function
+        const { data: session } = await supabase.auth.getSession();
+        if (!session.session?.access_token) {
+          throw new Error('No auth token');
+        }
+
+        const response = await fetch(`${supabase.supabaseUrl}/functions/v1/ask-llm-with-tokens`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            chatId: currentChat.id,
+            message: content,
+            modelId: targetModelId,
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (!response.ok) {
+          if (result.upgrade_required) {
+            setShowSubscriptionManager(true);
+          }
+          throw new Error(result.error || 'AI request failed');
+        }
+
+        // Update local token count
+        setChatOwnerTokens(result.tokensRemaining);
         
         // Update last used LLM in database
         if (targetModelName) {
@@ -184,20 +229,8 @@ function MainApp() {
           }
         }
         
-        // Refresh profile to update credits
-        refreshProfile();
-        
-        // Also refresh chat owner credits
-        if (currentChat?.owner_id) {
-          try {
-            const { data, error } = await supabase.rpc('get_profile_credits', { p_user_id: currentChat.owner_id });
-            if (!error) {
-              setChatOwnerCreditsBalance(data);
-            }
-          } catch (error) {
-            console.error('Error refreshing chat owner credits:', error);
-          }
-        }
+        // Refresh subscription data
+        refreshSubscription();
       } catch (error) {
         console.error('AI message error:', error);
         throw error;
@@ -208,7 +241,7 @@ function MainApp() {
     }
   };
 
-  if (loading) {
+  if (loading || subscriptionLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -243,6 +276,18 @@ function MainApp() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
+        {/* Token Usage Indicator */}
+        {subscription && !sidebarCollapsed && (
+          <div className="p-4 border-b border-gray-200">
+            <TokenUsageIndicator
+              tokens={subscription.tokens}
+              plan={subscription.plan}
+              maxTokens={subscription.maxTokens}
+              onUpgradeClick={() => setShowSubscriptionManager(true)}
+            />
+          </div>
+        )}
+
         <ChatHeader
           chat={currentChat}
           models={allModels}
@@ -265,7 +310,7 @@ function MainApp() {
             <MessageInput
               onSendMessage={handleSendMessage}
               onSendAIMessage={handleSendAIMessage}
-              creditsBalance={chatOwnerCreditsBalance} // Pass chat owner's credits
+              creditsBalance={chatOwnerTokens} // Pass chat owner's tokens
               onlineUsers={onlineUsers}
               availableModels={allModels}
             />
@@ -292,6 +337,16 @@ function MainApp() {
           </div>
         )}
       </div>
+
+      {/* Subscription Manager Modal */}
+      {showSubscriptionManager && subscription && (
+        <SubscriptionManager
+          userId={user.id}
+          currentPlan={subscription.plan}
+          currentTokens={subscription.tokens}
+          onClose={() => setShowSubscriptionManager(false)}
+        />
+      )}
     </div>
   );
 }
