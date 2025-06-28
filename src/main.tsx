@@ -10,7 +10,13 @@ const initializeRevenueCat = async () => {
   
   if (!revenueCatPublicKey) {
     console.warn('⚠️ RevenueCat: VITE_REVENUECAT_PUBLIC_KEY not found in environment variables');
-    return;
+    return false;
+  }
+
+  // Check if the key is a valid RevenueCat key format
+  if (!revenueCatPublicKey.startsWith('rc_')) {
+    console.warn('⚠️ RevenueCat: Invalid API key format. Please use a RevenueCat Web Billing or Paddle API key that starts with "rc_"');
+    return false;
   }
 
   try {
@@ -18,13 +24,19 @@ const initializeRevenueCat = async () => {
     // Use empty string instead of null for anonymous users
     await Purchases.configure(revenueCatPublicKey, "");
     console.log('✅ RevenueCat: SDK initialized successfully');
+    return true;
   } catch (error) {
     console.error('❌ RevenueCat: Failed to initialize SDK:', error);
+    return false;
   }
 };
 
 // Initialize RevenueCat before rendering the app
-initializeRevenueCat().then(() => {
+initializeRevenueCat().then((success) => {
+  if (!success) {
+    console.log('ℹ️ App will continue without RevenueCat features');
+  }
+  
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
