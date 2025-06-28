@@ -8,9 +8,19 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('🔐 useAuth: Initializing authentication...');
+    
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('❌ useAuth: Error getting session:', error);
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔐 useAuth: Initial session:', session ? 'Found' : 'None');
       setUser(session?.user ?? null);
+      
       if (session?.user) {
         fetchProfile(session.user.id);
       } else {
@@ -21,7 +31,9 @@ export function useAuth() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔐 useAuth: Auth state changed:', event, session ? 'Session exists' : 'No session');
         setUser(session?.user ?? null);
+        
         if (session?.user) {
           fetchProfile(session.user.id);
         } else {
@@ -31,35 +43,57 @@ export function useAuth() {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log('🔐 useAuth: Cleaning up auth subscription');
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (userId: string) => {
     try {
+      console.log('👤 useAuth: Fetching profile for user:', userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ useAuth: Error fetching profile:', error);
+        throw error;
+      }
+
+      console.log('✅ useAuth: Profile fetched successfully:', data?.username || 'No username');
       setProfile(data);
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('❌ useAuth: Profile fetch failed:', error);
+      // Don't throw here, just set profile to null and continue
+      setProfile(null);
     } finally {
+      console.log('🔐 useAuth: Setting loading to false');
       setLoading(false);
     }
   };
 
   const signIn = async (email: string, password: string) => {
+    console.log('🔐 useAuth: Attempting sign in for:', email);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    if (error) {
+      console.error('❌ useAuth: Sign in error:', error);
+    } else {
+      console.log('✅ useAuth: Sign in successful');
+    }
+    
     return { error };
   };
 
   const signUp = async (email: string, password: string, username: string) => {
+    console.log('🔐 useAuth: Attempting sign up for:', email);
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -69,11 +103,26 @@ export function useAuth() {
         },
       },
     });
+    
+    if (error) {
+      console.error('❌ useAuth: Sign up error:', error);
+    } else {
+      console.log('✅ useAuth: Sign up successful');
+    }
+    
     return { error };
   };
 
   const signOut = async () => {
+    console.log('🔐 useAuth: Signing out...');
     const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error('❌ useAuth: Sign out error:', error);
+    } else {
+      console.log('✅ useAuth: Sign out successful');
+    }
+    
     return { error };
   };
 

@@ -20,7 +20,7 @@ import { supabase } from './lib/supabase';
 
 function MainApp() {
   const location = useLocation();
-  const { user, profile, loading, signIn, signUp, signOut, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, signIn, signUp, signOut, refreshProfile } = useAuth();
   const { subscription, loading: subscriptionLoading, refreshSubscription } = useSubscription(user?.id);
   
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
@@ -234,12 +234,27 @@ function MainApp() {
     }
   };
 
-  if (loading || subscriptionLoading) {
+  // Show loading state with better debugging
+  const isLoading = authLoading || subscriptionLoading;
+  
+  console.log('🔄 App.tsx render state:', {
+    authLoading,
+    subscriptionLoading,
+    isLoading,
+    user: user ? 'Present' : 'None',
+    profile: profile ? 'Present' : 'None'
+  });
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Loading application...</p>
+          <p className="text-xs text-gray-400 mt-2">
+            Auth: {authLoading ? 'Loading...' : 'Ready'} | 
+            Subscription: {subscriptionLoading ? 'Loading...' : 'Ready'}
+          </p>
         </div>
       </div>
     );
@@ -345,6 +360,8 @@ function MainApp() {
 }
 
 export default function App() {
+  console.log('🚀 App.tsx: Application starting...');
+  
   return (
     <Router>
       <Routes>
