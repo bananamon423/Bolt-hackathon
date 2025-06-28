@@ -55,48 +55,39 @@ export function useSubscription(userId: string | undefined) {
     try {
       console.log('💳 useSubscription: Fetching profile data...');
       
-      // Get user profile with subscription data
+      // Use the new RPC function to get user tokens and plan info
+      const { data: tokenData, error: tokenError } = await supabase.rpc('get_user_tokens', {
+        p_user_id: userId
+      });
+
+      if (tokenError) {
+        console.error('❌ useSubscription: Token RPC error:', tokenError);
+        throw tokenError;
+      }
+
+      console.log('💳 useSubscription: Token data:', tokenData);
+
+      // Also get additional profile data
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('plan, tokens, subscription_status, last_token_reset')
+        .select('subscription_status, last_token_reset')
         .eq('id', userId)
         .single();
 
       if (profileError) {
         console.error('❌ useSubscription: Profile error:', profileError);
-        throw profileError;
-      }
-
-      console.log('💳 useSubscription: Profile data:', profile);
-
-      // Get plan details
-      const { data: planData, error: planError } = await supabase
-        .from('subscription_plans')
-        .select('tokens_per_month')
-        .eq('plan_id', profile.plan)
-        .single();
-
-      if (planError) {
-        console.error('❌ useSubscription: Plan error:', planError);
         // Don't throw here, use default values
-        console.log('💳 useSubscription: Using default plan values');
-        setSubscription({
-          plan: profile.plan,
-          tokens: profile.tokens,
-          maxTokens: 10, // Default for free plan
-          subscriptionStatus: profile.subscription_status,
-          lastTokenReset: profile.last_token_reset,
-        });
-      } else {
-        console.log('💳 useSubscription: Plan data:', planData);
-        setSubscription({
-          plan: profile.plan,
-          tokens: profile.tokens,
-          maxTokens: planData.tokens_per_month,
-          subscriptionStatus: profile.subscription_status,
-          lastTokenReset: profile.last_token_reset,
-        });
+        console.log('💳 useSubscription: Using default profile values');
       }
+
+      setSubscription({
+        plan: tokenData.plan || 'free_plan',
+        tokens: tokenData.tokens || 0,
+        maxTokens: tokenData.max_tokens || 10,
+        subscriptionStatus: profile?.subscription_status || 'free',
+        lastTokenReset: profile?.last_token_reset || new Date().toISOString(),
+      });
+
     } catch (error) {
       console.error('❌ useSubscription: Fetch failed:', error);
       // Set a default subscription instead of leaving it null
