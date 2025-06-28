@@ -7,26 +7,51 @@ export function useChats(userId: string | undefined) {
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('💬 useChats: No user ID provided');
+      return;
+    }
 
+    console.log('💬 useChats: Initializing chat tracking for user:', userId);
     fetchChats();
 
-    // Subscribe to chat changes
+    // Subscribe to chat changes with enhanced logging
     const chatsSubscription = supabase
-      .channel('chats')
+      .channel(`chats_${userId}`, {
+        config: {
+          broadcast: { self: false },
+          presence: { key: userId },
+          private: false
+        }
+      })
       .on('postgres_changes', 
         { 
           event: '*', 
           schema: 'public', 
           table: 'chats'
         },
-        () => fetchChats()
+        (payload) => {
+          console.log('🔄 useChats: Chat change event received:', {
+            eventType: payload.eventType,
+            chatId: payload.new?.id || payload.old?.id,
+            chatTitle: payload.new?.chat_title || payload.old?.chat_title
+          });
+          fetchChats();
+        }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 useChats: Chat subscription status:', status);
+      });
 
-    // Subscribe to chat member changes
+    // Subscribe to chat member changes with enhanced logging
     const membersSubscription = supabase
-      .channel('chat_members')
+      .channel(`chat_members_${userId}`, {
+        config: {
+          broadcast: { self: false },
+          presence: { key: userId },
+          private: false
+        }
+      })
       .on('postgres_changes',
         {
           event: '*',
@@ -34,21 +59,35 @@ export function useChats(userId: string | undefined) {
           table: 'chat_members',
           filter: `user_id=eq.${userId}`
         },
-        () => fetchChats()
+        (payload) => {
+          console.log('🔄 useChats: Chat member change event received:', {
+            eventType: payload.eventType,
+            chatId: payload.new?.chat_id || payload.old?.chat_id,
+            userId: payload.new?.user_id || payload.old?.user_id,
+            role: payload.new?.role || payload.old?.role
+          });
+          fetchChats();
+        }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 useChats: Chat members subscription status:', status);
+      });
 
     return () => {
+      console.log('🧹 useChats: Cleaning up chat subscriptions for user:', userId);
       chatsSubscription.unsubscribe();
       membersSubscription.unsubscribe();
     };
   }, [userId]);
 
   const fetchChats = async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('🚫 useChats: Cannot fetch chats - no userId');
+      return;
+    }
 
     try {
-      console.log('📥 Fetching chats for user:', userId);
+      console.log('📥 useChats: Fetching chats for user:', userId);
       
       // Get all chats where user is a member
       const { data, error } = await supabase
@@ -68,7 +107,7 @@ export function useChats(userId: string | undefined) {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('❌ Error fetching chats:', error);
+        console.error('❌ useChats: Error fetching chats:', error);
         throw error;
       }
 
@@ -77,20 +116,27 @@ export function useChats(userId: string | undefined) {
         .filter(Boolean)
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()) || [];
 
-      console.log('📥 Fetched', chatList.length, 'chats');
+      console.log('📥 useChats: Fetched chats successfully:', {
+        count: chatList.length,
+        chatIds: chatList.map(chat => chat.id)
+      });
+      
       setChats(chatList as Chat[]);
     } catch (error) {
-      console.error('Error fetching chats:', error);
+      console.error('❌ useChats: Error fetching chats:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const createChat = async (title: string = 'New Chat') => {
-    if (!userId) return null;
+    if (!userId) {
+      console.log('🚫 useChats: Cannot create chat - no userId');
+      return null;
+    }
 
     try {
-      console.log('🆕 Creating new chat:', title);
+      console.log('🆕 useChats: Creating new chat:', title);
       
       const { data: chat, error: chatError } = await supabase
         .from('chats')
@@ -101,9 +147,12 @@ export function useChats(userId: string | undefined) {
         .select()
         .single();
 
-      if (chatError) throw chatError;
+      if (chatError) {
+        console.error('❌ useChats: Error creating chat:', chatError);
+        throw chatError;
+      }
 
-      console.log('✅ Chat created:', chat.id);
+      console.log('✅ useChats: Chat created:', chat.id);
 
       // Add user as owner/member
       const { error: memberError } = await supabase
@@ -115,67 +164,81 @@ export function useChats(userId: string | undefined) {
         });
 
       if (memberError) {
-        console.error('❌ Error adding user as member:', memberError);
+        console.error('❌ useChats: Error adding user as member:', memberError);
         throw memberError;
       }
 
-      console.log('✅ User added as chat owner');
+      console.log('✅ useChats: User added as chat owner');
 
       await fetchChats();
       return chat;
     } catch (error) {
-      console.error('Error creating chat:', error);
+      console.error('❌ useChats: Error creating chat:', error);
       return null;
     }
   };
 
   const updateChatTitle = async (chatId: string, title: string) => {
     try {
-      console.log('📝 Updating chat title:', chatId, title);
+      console.log('📝 useChats: Updating chat title:', { chatId, title });
       
       const { error } = await supabase
         .from('chats')
         .update({ chat_title: title })
         .eq('id', chatId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ useChats: Error updating chat title:', error);
+        throw error;
+      }
       
-      console.log('✅ Chat title updated');
+      console.log('✅ useChats: Chat title updated');
       await fetchChats();
     } catch (error) {
-      console.error('Error updating chat title:', error);
+      console.error('❌ useChats: Error updating chat title:', error);
     }
   };
 
   const deleteChat = async (chatId: string) => {
-    if (!userId) return false;
+    if (!userId) {
+      console.log('🚫 useChats: Cannot delete chat - no userId');
+      return false;
+    }
 
     setDeletingChatId(chatId);
     
     try {
-      console.log('🗑️ Deleting chat:', chatId);
+      console.log('🗑️ useChats: Deleting chat:', chatId);
       
       const { data, error } = await supabase.rpc('delete_chat', {
         p_chat_id: chatId
       });
 
       if (error) {
-        console.error('❌ Error deleting chat:', error);
+        console.error('❌ useChats: Error deleting chat:', error);
         throw new Error(error.message);
       }
 
       if (!data.success) {
+        console.error('❌ useChats: Delete chat failed:', data.error);
         throw new Error(data.error || 'Failed to delete chat');
       }
 
-      console.log('✅ Chat deleted successfully:', data);
+      console.log('✅ useChats: Chat deleted successfully:', data);
       
       // Remove chat from local state immediately
-      setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
+      setChats(prevChats => {
+        const updatedChats = prevChats.filter(chat => chat.id !== chatId);
+        console.log('🔄 useChats: Updated local chat list after deletion:', {
+          removedChatId: chatId,
+          remainingChats: updatedChats.length
+        });
+        return updatedChats;
+      });
       
       return true;
     } catch (error) {
-      console.error('Error deleting chat:', error);
+      console.error('❌ useChats: Error deleting chat:', error);
       throw error;
     } finally {
       setDeletingChatId(null);
@@ -183,25 +246,35 @@ export function useChats(userId: string | undefined) {
   };
 
   const canDeleteChat = (chat: Chat) => {
-    return chat.owner_id === userId;
+    const canDelete = chat.owner_id === userId;
+    console.log('🔍 useChats: Checking delete permission:', {
+      chatId: chat.id,
+      chatOwnerId: chat.owner_id,
+      currentUserId: userId,
+      canDelete
+    });
+    return canDelete;
   };
 
   const joinChatByShareLink = async (shareLink: string) => {
-    if (!userId) return null;
+    if (!userId) {
+      console.log('🚫 useChats: Cannot join chat - no userId');
+      return null;
+    }
 
     try {
-      console.log('🚪 Joining chat by share link:', shareLink);
+      console.log('🚪 useChats: Joining chat by share link:', shareLink);
       
       const { data, error } = await supabase.rpc('join_chat_by_share_link', {
         p_share_link_uuid: shareLink
       });
 
       if (error) {
-        console.error('❌ Error joining chat:', error);
+        console.error('❌ useChats: Error joining chat:', error);
         throw error;
       }
 
-      console.log('✅ Join result:', data);
+      console.log('✅ useChats: Join result:', data);
       
       if (data.success) {
         await fetchChats();
@@ -210,7 +283,7 @@ export function useChats(userId: string | undefined) {
         throw new Error(data.error || 'Failed to join chat');
       }
     } catch (error) {
-      console.error('Error joining chat by share link:', error);
+      console.error('❌ useChats: Error joining chat by share link:', error);
       throw error;
     }
   };

@@ -18,18 +18,27 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
   // Update chat ID ref when it changes
   useEffect(() => {
+    console.log('🔄 useMessages: Chat ID changed from', chatIdRef.current, 'to', chatId);
     chatIdRef.current = chatId;
     // Clear processed messages when switching chats
     processedMessageIds.current.clear();
     pendingMessages.current.clear();
     isInitialLoad.current = true;
+    console.log('🧹 useMessages: Cleared processed messages and pending messages for new chat');
   }, [chatId]);
 
   // Memoized function to add a message to the state
   const addMessageToState = useCallback((newMessage: Message, isOptimistic = false) => {
+    console.log('📝 useMessages: Attempting to add message to state:', {
+      messageId: newMessage.id,
+      content: newMessage.content.substring(0, 50) + '...',
+      isOptimistic,
+      alreadyProcessed: processedMessageIds.current.has(newMessage.id)
+    });
+
     // Avoid duplicates using the processed IDs set
     if (processedMessageIds.current.has(newMessage.id)) {
-      console.log('🚫 Message already processed:', newMessage.id);
+      console.log('🚫 useMessages: Message already processed, skipping:', newMessage.id);
       return;
     }
 
@@ -39,23 +48,38 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
       // Double-check for duplicates in current state
       const exists = currentMessages.some(m => m.id === newMessage.id);
       if (exists) {
-        console.log('🚫 Message already exists in state:', newMessage.id);
+        console.log('🚫 useMessages: Message already exists in state, skipping:', newMessage.id);
         return currentMessages;
       }
 
-      console.log('✅ Adding new message to state:', newMessage.id, isOptimistic ? '(optimistic)' : '(confirmed)');
+      console.log('✅ useMessages: Adding new message to state:', {
+        messageId: newMessage.id,
+        senderType: newMessage.sender_type,
+        isOptimistic,
+        totalMessages: currentMessages.length + 1
+      });
       
       // Add new message and sort by timestamp
       const newMessages = [...currentMessages, newMessage];
-      return newMessages.sort((a, b) => 
+      const sortedMessages = newMessages.sort((a, b) => 
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
+      
+      console.log('📊 useMessages: Updated message list:', {
+        totalMessages: sortedMessages.length,
+        latestMessageId: sortedMessages[sortedMessages.length - 1]?.id
+      });
+      
+      return sortedMessages;
     });
   }, []);
 
   // Function to add optimistic message
   const addOptimisticMessage = useCallback((content: string, userId: string) => {
-    if (!chatId || !currentUser) return null;
+    if (!chatId || !currentUser) {
+      console.log('🚫 useMessages: Cannot add optimistic message - missing chatId or currentUser');
+      return null;
+    }
 
     const optimisticMessage: Message = {
       id: Date.now(), // Temporary ID
@@ -74,6 +98,12 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
     const tempId = `temp_${Date.now()}`;
     pendingMessages.current.set(tempId, optimisticMessage);
 
+    console.log('⚡ useMessages: Adding optimistic message:', {
+      tempId,
+      messageId: optimisticMessage.id,
+      content: content.substring(0, 50) + '...'
+    });
+
     // Add to UI immediately
     addMessageToState(optimisticMessage, true);
     
@@ -84,6 +114,12 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
   const replaceOptimisticMessage = useCallback((tempId: string, realMessage: Message) => {
     const optimisticMessage = pendingMessages.current.get(tempId);
     if (optimisticMessage) {
+      console.log('🔄 useMessages: Replacing optimistic message:', {
+        tempId,
+        optimisticId: optimisticMessage.id,
+        realId: realMessage.id
+      });
+      
       pendingMessages.current.delete(tempId);
       
       setMessages(currentMessages => {
@@ -94,23 +130,33 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         // Mark real message as processed
         processedMessageIds.current.add(realMessage.id);
         
-        return withReal.sort((a, b) => 
+        const sortedMessages = withReal.sort((a, b) => 
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
+        
+        console.log('✅ useMessages: Optimistic message replaced successfully');
+        return sortedMessages;
       });
+    } else {
+      console.log('⚠️ useMessages: Could not find optimistic message to replace:', tempId);
     }
   }, []);
 
   // Memoized function to update a message in the state
   const updateMessageInState = useCallback((updatedMessage: Message) => {
+    console.log('🔄 useMessages: Attempting to update message in state:', {
+      messageId: updatedMessage.id,
+      content: updatedMessage.content.substring(0, 50) + '...'
+    });
+
     setMessages(currentMessages => {
       const messageExists = currentMessages.some(m => m.id === updatedMessage.id);
       if (!messageExists) {
-        console.log('🚫 Message to update not found in state:', updatedMessage.id);
+        console.log('🚫 useMessages: Message to update not found in state:', updatedMessage.id);
         return currentMessages;
       }
 
-      console.log('✅ Updating message in state:', updatedMessage.id);
+      console.log('✅ useMessages: Updating message in state:', updatedMessage.id);
       return currentMessages.map(m => 
         m.id === updatedMessage.id ? updatedMessage : m
       );
@@ -119,38 +165,46 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
   useEffect(() => {
     if (!chatId) {
+      console.log('🧹 useMessages: No chatId provided, clearing messages and cleaning up');
       setMessages([]);
       setLoading(false);
       cleanupSubscription();
       return;
     }
 
+    console.log('🚀 useMessages: Setting up for chat:', chatId);
     fetchMessages();
     setupRealtimeSubscription();
 
     return () => {
+      console.log('🧹 useMessages: Cleaning up useEffect for chat:', chatId);
       cleanupSubscription();
     };
   }, [chatId]);
 
   const cleanupSubscription = useCallback(() => {
     if (subscriptionRef.current) {
-      console.log('🧹 Cleaning up subscription for chat:', chatIdRef.current);
+      console.log('🧹 useMessages: Cleaning up subscription for chat:', chatIdRef.current);
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
     }
   }, []);
 
   const setupRealtimeSubscription = useCallback(() => {
-    if (!chatId) return;
+    if (!chatId) {
+      console.log('🚫 useMessages: Cannot setup subscription - no chatId');
+      return;
+    }
 
     // Clean up any existing subscription
     cleanupSubscription();
 
-    console.log('📡 Setting up real-time subscription for chat:', chatId);
+    console.log('📡 useMessages: Setting up real-time subscription for chat:', chatId);
 
     // Create subscription with a unique channel name
     const channelName = `messages_${chatId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log('📡 useMessages: Creating channel:', channelName);
+    
     const channel = supabase.channel(channelName, {
       config: {
         broadcast: { self: false }, // Don't receive our own broadcasts
@@ -169,17 +223,27 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           filter: `chat_id=eq.${chatId}`
         },
         async (payload) => {
-          console.log('🔥 Real-time INSERT received:', payload);
+          console.log('🔥 useMessages: Real-time INSERT received:', {
+            messageId: payload.new.id,
+            chatId: payload.new.chat_id,
+            senderType: payload.new.sender_type,
+            content: payload.new.content?.substring(0, 50) + '...',
+            currentChatId: chatIdRef.current,
+            isInitialLoad: isInitialLoad.current
+          });
           
           // Only process if this is for the current chat
           if (payload.new.chat_id !== chatIdRef.current) {
-            console.log('🚫 Ignoring message for different chat');
+            console.log('🚫 useMessages: Ignoring message for different chat:', {
+              receivedChatId: payload.new.chat_id,
+              currentChatId: chatIdRef.current
+            });
             return;
           }
 
           // Skip if this is the initial load to prevent duplicates
           if (isInitialLoad.current) {
-            console.log('🚫 Skipping real-time message during initial load');
+            console.log('🚫 useMessages: Skipping real-time message during initial load');
             return;
           }
 
@@ -195,11 +259,15 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
           filter: `chat_id=eq.${chatId}`
         },
         async (payload) => {
-          console.log('🔄 Real-time UPDATE received:', payload);
+          console.log('🔄 useMessages: Real-time UPDATE received:', {
+            messageId: payload.new.id,
+            chatId: payload.new.chat_id,
+            currentChatId: chatIdRef.current
+          });
           
           // Only process if this is for the current chat
           if (payload.new.chat_id !== chatIdRef.current) {
-            console.log('🚫 Ignoring update for different chat');
+            console.log('🚫 useMessages: Ignoring update for different chat');
             return;
           }
 
@@ -207,40 +275,46 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         }
       )
       .subscribe((status) => {
-        console.log('📡 Subscription status for', channelName, ':', status);
+        console.log('📡 useMessages: Subscription status for', channelName, ':', status);
         
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to real-time messages for chat:', chatId);
+          console.log('✅ useMessages: Successfully subscribed to real-time messages for chat:', chatId);
           // Mark initial load as complete after subscription is established
           setTimeout(() => {
+            console.log('✅ useMessages: Initial load complete, enabling real-time updates');
             isInitialLoad.current = false;
-          }, 500); // Reduced timeout
+          }, 500);
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Channel subscription error for chat:', chatId);
+          console.error('❌ useMessages: Channel subscription error for chat:', chatId);
           // Retry subscription after a delay, but only if we're still on the same chat
           setTimeout(() => {
             if (chatIdRef.current === chatId) {
-              console.log('🔄 Retrying subscription...');
+              console.log('🔄 useMessages: Retrying subscription...');
               setupRealtimeSubscription();
             }
           }, 2000);
         } else if (status === 'TIMED_OUT') {
-          console.error('⏰ Subscription timed out for chat:', chatId);
+          console.error('⏰ useMessages: Subscription timed out for chat:', chatId);
           // Retry subscription, but only if we're still on the same chat
           setTimeout(() => {
             if (chatIdRef.current === chatId) {
-              console.log('🔄 Retrying subscription after timeout...');
+              console.log('🔄 useMessages: Retrying subscription after timeout...');
               setupRealtimeSubscription();
             }
           }, 1000);
         } else if (status === 'CLOSED') {
-          console.log('🔒 Subscription closed for chat:', chatId);
+          console.log('🔒 useMessages: Subscription closed for chat:', chatId);
         }
       });
   }, [chatId, cleanupSubscription]);
 
   const handleRealtimeMessage = useCallback(async (newMessage: any) => {
     try {
+      console.log('🔄 useMessages: Processing real-time message:', {
+        messageId: newMessage.id,
+        senderType: newMessage.sender_type
+      });
+
       // Fetch complete message with profile data
       const { data: fullMessage, error } = await supabase
         .from('messages')
@@ -256,20 +330,28 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         .single();
 
       if (error) {
-        console.error('❌ Error fetching full message:', error);
+        console.error('❌ useMessages: Error fetching full message:', error);
         return;
       }
 
       if (fullMessage) {
+        console.log('✅ useMessages: Full message fetched, adding to state:', {
+          messageId: fullMessage.id,
+          hasProfile: !!fullMessage.profiles
+        });
         addMessageToState(fullMessage);
       }
     } catch (err) {
-      console.error('❌ Error processing real-time message:', err);
+      console.error('❌ useMessages: Error processing real-time message:', err);
     }
   }, [addMessageToState]);
 
   const handleRealtimeUpdate = useCallback(async (updatedMessage: any) => {
     try {
+      console.log('🔄 useMessages: Processing real-time update:', {
+        messageId: updatedMessage.id
+      });
+
       // Fetch complete updated message with profile data
       const { data: fullMessage, error } = await supabase
         .from('messages')
@@ -285,25 +367,31 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         .single();
 
       if (error) {
-        console.error('❌ Error fetching updated message:', error);
+        console.error('❌ useMessages: Error fetching updated message:', error);
         return;
       }
 
       if (fullMessage) {
+        console.log('✅ useMessages: Updated message fetched, updating state:', {
+          messageId: fullMessage.id
+        });
         updateMessageInState(fullMessage);
       }
     } catch (err) {
-      console.error('❌ Error processing real-time update:', err);
+      console.error('❌ useMessages: Error processing real-time update:', err);
     }
   }, [updateMessageInState]);
 
   const fetchMessages = async () => {
-    if (!chatId) return;
+    if (!chatId) {
+      console.log('🚫 useMessages: Cannot fetch messages - no chatId');
+      return;
+    }
+    
+    console.log('📥 useMessages: Starting to fetch messages for chat:', chatId);
     setLoading(true);
     
     try {
-      console.log('📥 Fetching messages for chat:', chatId);
-      
       const { data, error } = await supabase
         .from('messages')
         .select(`
@@ -317,33 +405,57 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         .eq('chat_id', chatId)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ useMessages: Error fetching messages:', error);
+        throw error;
+      }
       
-      console.log('📥 Fetched', data?.length || 0, 'messages');
+      console.log('📥 useMessages: Fetched messages successfully:', {
+        count: data?.length || 0,
+        chatId
+      });
       
       // Clear processed messages and rebuild the set
       processedMessageIds.current.clear();
       pendingMessages.current.clear();
       if (data) {
-        data.forEach(message => processedMessageIds.current.add(message.id));
+        data.forEach(message => {
+          processedMessageIds.current.add(message.id);
+        });
+        console.log('📝 useMessages: Processed message IDs updated:', processedMessageIds.current.size);
       }
       
       setMessages(data || []);
     } catch (error) {
-      console.error('❌ Error fetching messages:', error);
+      console.error('❌ useMessages: Error fetching messages:', error);
     } finally {
       setLoading(false);
+      console.log('✅ useMessages: Message fetching completed');
     }
   };
 
   const sendMessage = async (content: string, userId: string) => {
-    if (!chatId || !content.trim() || !currentUser) return null;
+    if (!chatId || !content.trim() || !currentUser) {
+      console.log('🚫 useMessages: Cannot send message - missing requirements:', {
+        hasChatId: !!chatId,
+        hasContent: !!content.trim(),
+        hasCurrentUser: !!currentUser
+      });
+      return null;
+    }
 
-    console.log('📤 Sending message:', content);
+    console.log('📤 useMessages: Sending message:', {
+      content: content.substring(0, 50) + '...',
+      userId,
+      chatId
+    });
 
     // Add optimistic message immediately
     const optimistic = addOptimisticMessage(content, userId);
-    if (!optimistic) return null;
+    if (!optimistic) {
+      console.log('❌ useMessages: Failed to create optimistic message');
+      return null;
+    }
 
     try {
       const { data: insertedMessage, error } = await supabase
@@ -366,7 +478,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         .single();
 
       if (error) {
-        console.error('❌ Error sending message:', error);
+        console.error('❌ useMessages: Error sending message:', error);
         // Remove optimistic message on error
         setMessages(currentMessages => 
           currentMessages.filter(m => m.id !== optimistic.optimisticMessage.id)
@@ -374,23 +486,29 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         throw error;
       }
 
-      console.log('✅ Message sent successfully:', insertedMessage.id);
+      console.log('✅ useMessages: Message sent successfully:', {
+        messageId: insertedMessage.id,
+        tempId: optimistic.tempId
+      });
       
       // Replace optimistic message with real one
       replaceOptimisticMessage(optimistic.tempId, insertedMessage);
       
       return insertedMessage;
     } catch (error) {
-      console.error('❌ Error sending message:', error);
+      console.error('❌ useMessages: Error sending message:', error);
       throw error;
     }
   };
 
   const sendAIMessage = async (content: string, modelId: string, modelName?: string) => {
-    if (!chatId || !content.trim()) return;
+    if (!chatId || !content.trim()) {
+      console.log('🚫 useMessages: Cannot send AI message - missing requirements');
+      return;
+    }
 
-    console.log('🤖 Sending AI message:', {
-      content,
+    console.log('🤖 useMessages: Sending AI message:', {
+      content: content.substring(0, 50) + '...',
       modelId,
       modelName,
       chatId
@@ -410,7 +528,7 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
         modelId,
       };
 
-      console.log(`🔄 Calling ${functionToInvoke} function with payload:`, functionPayload);
+      console.log(`🔄 useMessages: Calling ${functionToInvoke} function with payload:`, functionPayload);
 
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/${functionToInvoke}`, {
         method: 'POST',
@@ -423,17 +541,21 @@ export function useMessages(chatId: string | undefined, currentUser: Profile | n
 
       const result = await response.json();
       
-      console.log(`🤖 ${functionToInvoke} function response:`, result);
+      console.log(`🤖 useMessages: ${functionToInvoke} function response:`, {
+        success: result.success,
+        messageId: result.messageId,
+        error: result.error
+      });
       
       if (!response.ok) {
-        console.error(`❌ Error invoking ${functionToInvoke} function:`, result);
+        console.error(`❌ useMessages: Error invoking ${functionToInvoke} function:`, result);
         throw new Error(result.error || `${functionToInvoke} request failed`);
       }
 
-      console.log(`✅ ${functionToInvoke} request completed successfully`);
+      console.log(`✅ useMessages: ${functionToInvoke} request completed successfully`);
       return result;
     } catch (error) {
-      console.error('❌ Error sending AI message:', error);
+      console.error('❌ useMessages: Error sending AI message:', error);
       throw error;
     }
   };
