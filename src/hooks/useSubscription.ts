@@ -55,37 +55,42 @@ export function useSubscription(userId: string | undefined) {
     try {
       console.log('💳 useSubscription: Fetching profile data...');
       
-      // Use the new RPC function to get user tokens and plan info
-      const { data: tokenData, error: tokenError } = await supabase.rpc('get_user_tokens', {
-        p_user_id: userId
-      });
-
-      if (tokenError) {
-        console.error('❌ useSubscription: Token RPC error:', tokenError);
-        throw tokenError;
-      }
-
-      console.log('💳 useSubscription: Token data:', tokenData);
-
-      // Also get additional profile data
+      // Get user profile data
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('subscription_status, last_token_reset')
+        .select('plan, tokens, subscription_status, last_token_reset')
         .eq('id', userId)
         .single();
 
       if (profileError) {
         console.error('❌ useSubscription: Profile error:', profileError);
-        // Don't throw here, use default values
-        console.log('💳 useSubscription: Using default profile values');
+        throw profileError;
       }
 
+      console.log('💳 useSubscription: Profile data:', profile);
+
+      // Get subscription plan details to determine max tokens
+      const { data: planData, error: planError } = await supabase
+        .from('subscription_plans')
+        .select('tokens_per_month')
+        .eq('plan_id', profile.plan)
+        .eq('is_active', true)
+        .single();
+
+      if (planError) {
+        console.error('❌ useSubscription: Plan error:', planError);
+        // Don't throw here, use default values for free plan
+        console.log('💳 useSubscription: Using default plan values');
+      }
+
+      const maxTokens = planData?.tokens_per_month || 10; // Default to 10 for free plan
+
       setSubscription({
-        plan: tokenData.plan || 'free_plan',
-        tokens: tokenData.tokens || 0,
-        maxTokens: tokenData.max_tokens || 10,
-        subscriptionStatus: profile?.subscription_status || 'free',
-        lastTokenReset: profile?.last_token_reset || new Date().toISOString(),
+        plan: profile.plan || 'free_plan',
+        tokens: profile.tokens || 0,
+        maxTokens: maxTokens,
+        subscriptionStatus: profile.subscription_status || 'free',
+        lastTokenReset: profile.last_token_reset || new Date().toISOString(),
       });
 
     } catch (error) {

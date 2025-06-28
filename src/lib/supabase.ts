@@ -49,9 +49,12 @@ export type Profile = {
   username: string | null;
   email: string | null;
   profile_picture_url: string | null;
-  credits_balance: number;
   role: string;
   created_at: string;
+  plan: string;
+  tokens: number;
+  subscription_status: string;
+  last_token_reset: string;
 };
 
 export type Chat = {
@@ -104,6 +107,18 @@ export type ChatMember = {
   user_id: string;
   role: string;
   joined_at: string;
+};
+
+export type SubscriptionPlan = {
+  id: string;
+  plan_id: string;
+  name: string;
+  tokens_per_month: number;
+  price_monthly: number | null;
+  revenuecat_entitlement_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 // OpenRouter model configurations
