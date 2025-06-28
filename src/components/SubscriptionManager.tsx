@@ -107,10 +107,6 @@ export function SubscriptionManager({
 
       console.log('💳 SubscriptionManager: Selected plan:', selectedPlan);
 
-      // Set the user ID in RevenueCat
-      await Purchases.identify(userId);
-      console.log('✅ SubscriptionManager: User identified in RevenueCat');
-
       // Get available packages from RevenueCat
       const offerings = await Purchases.getOfferings();
       console.log('💳 SubscriptionManager: Available offerings:', offerings);

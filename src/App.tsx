@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import * as Purchases from '@revenuecat/purchases-js';
 import { useAuth } from './hooks/useAuth';
 import { useChats } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
@@ -36,6 +37,41 @@ function MainApp() {
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
+
+  // Configure RevenueCat when user authentication state changes
+  useEffect(() => {
+    const configureRevenueCat = async () => {
+      const revenueCatPublicKey = import.meta.env.VITE_REVENUECAT_PUBLIC_KEY;
+      
+      if (!revenueCatPublicKey) {
+        console.warn('⚠️ RevenueCat: VITE_REVENUECAT_PUBLIC_KEY not found in environment variables');
+        return;
+      }
+
+      // Check if the key is a valid RevenueCat key format
+      if (!revenueCatPublicKey.startsWith('rc_')) {
+        console.warn('⚠️ RevenueCat: Invalid API key format. Please use a RevenueCat Web Billing API key that starts with "rc_"');
+        return;
+      }
+
+      try {
+        console.log('🚀 RevenueCat: Configuring SDK with user:', user?.id || 'anonymous');
+        
+        // Configure RevenueCat with the current user ID (or null for anonymous)
+        await Purchases.configure({
+          apiKey: revenueCatPublicKey,
+          appUserID: user?.id || null, // Use user ID if logged in, null for anonymous
+        });
+        
+        console.log('✅ RevenueCat: SDK configured successfully');
+      } catch (error) {
+        console.error('❌ RevenueCat: Failed to configure SDK:', error);
+      }
+    };
+
+    // Configure RevenueCat whenever the user changes (login/logout)
+    configureRevenueCat();
+  }, [user]);
 
   // Use models directly from the database
   const allModels = models;
