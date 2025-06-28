@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Crown, Zap, Check, X, CreditCard, Users, MessageSquare } from 'lucide-react';
+import { Purchases } from '@revenuecat/purchases-js';
 import { supabase } from '../lib/supabase';
 
 interface SubscriptionPlan {
@@ -24,18 +25,21 @@ interface SubscriptionManagerProps {
   currentPlan?: string;
   currentTokens?: number;
   onClose: () => void;
+  refreshSubscription?: () => void;
 }
 
 export function SubscriptionManager({ 
   userId, 
   currentPlan = 'free_plan', 
   currentTokens = 0,
-  onClose 
+  onClose,
+  refreshSubscription
 }: SubscriptionManagerProps) {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [userSubscription, setUserSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPlans();
@@ -44,31 +48,45 @@ export function SubscriptionManager({
 
   const fetchPlans = async () => {
     try {
+      console.log('💳 SubscriptionManager: Fetching subscription plans...');
       const { data, error } = await supabase
         .from('subscription_plans')
         .select('*')
         .eq('is_active', true)
         .order('price_monthly');
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ SubscriptionManager: Error fetching plans:', error);
+        throw error;
+      }
+      
+      console.log('✅ SubscriptionManager: Plans fetched:', data?.length || 0);
       setPlans(data || []);
     } catch (error) {
-      console.error('Error fetching plans:', error);
+      console.error('❌ SubscriptionManager: Error fetching plans:', error);
+      setError('Failed to load subscription plans');
     }
   };
 
   const fetchUserSubscription = async () => {
     try {
+      console.log('💳 SubscriptionManager: Fetching user subscription...');
       const { data, error } = await supabase
         .from('profiles')
         .select('plan, subscription_status, tokens, last_token_reset')
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ SubscriptionManager: Error fetching user subscription:', error);
+        throw error;
+      }
+      
+      console.log('✅ SubscriptionManager: User subscription fetched:', data);
       setUserSubscription(data);
     } catch (error) {
-      console.error('Error fetching user subscription:', error);
+      console.error('❌ SubscriptionManager: Error fetching user subscription:', error);
+      setError('Failed to load current subscription');
     } finally {
       setLoading(false);
     }
@@ -76,25 +94,106 @@ export function SubscriptionManager({
 
   const handleSubscribe = async (planId: string) => {
     setSubscribing(planId);
+    setError(null);
     
     try {
-      // In a real implementation, you would:
-      // 1. Call RevenueCat SDK to initiate purchase
-      // 2. Handle the purchase flow
-      // 3. RevenueCat webhook will update the subscription
+      console.log('💳 SubscriptionManager: Starting subscription process for plan:', planId);
       
-      // For demo purposes, we'll simulate the subscription update
-      console.log(`Subscribing to plan: ${planId}`);
+      // Find the selected plan
+      const selectedPlan = plans.find(plan => plan.plan_id === planId);
+      if (!selectedPlan) {
+        throw new Error('Selected plan not found');
+      }
+
+      console.log('💳 SubscriptionManager: Selected plan:', selectedPlan);
+
+      // Set the user ID in RevenueCat
+      await Purchases.identify(userId);
+      console.log('✅ SubscriptionManager: User identified in RevenueCat');
+
+      // Get available packages from RevenueCat
+      const offerings = await Purchases.getOfferings();
+      console.log('💳 SubscriptionManager: Available offerings:', offerings);
+
+      // Find the package that matches our plan
+      let packageToPurchase = null;
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Look through all offerings for a package with matching identifier
+      for (const offering of Object.values(offerings.all)) {
+        for (const pkg of offering.availablePackages) {
+          if (pkg.identifier === planId || pkg.product.identifier === planId) {
+            packageToPurchase = pkg;
+            break;
+          }
+        }
+        if (packageToPurchase) break;
+      }
+
+      if (!packageToPurchase) {
+        console.warn('⚠️ SubscriptionManager: Package not found in RevenueCat, using fallback');
+        // If we can't find the exact package, try to use the current offering's default
+        const currentOffering = offerings.current;
+        if (currentOffering && currentOffering.availablePackages.length > 0) {
+          // Try to find a package that might match by price or name
+          packageToPurchase = currentOffering.availablePackages.find(pkg => 
+            pkg.product.title.toLowerCase().includes(selectedPlan.name.toLowerCase())
+          ) || currentOffering.availablePackages[0];
+        }
+      }
+
+      if (!packageToPurchase) {
+        throw new Error(`No RevenueCat package found for plan: ${planId}. Please ensure the plan is configured in RevenueCat.`);
+      }
+
+      console.log('💳 SubscriptionManager: Found package to purchase:', packageToPurchase);
+
+      // Attempt the purchase
+      console.log('💳 SubscriptionManager: Initiating purchase...');
+      const purchaseResult = await Purchases.purchasePackage(packageToPurchase);
       
-      // In production, this would be handled by the RevenueCat webhook
-      alert(`Subscription to ${planId} initiated! In production, this would open the payment flow.`);
+      console.log('✅ SubscriptionManager: Purchase completed:', purchaseResult);
+
+      // Check if the purchase was successful
+      if (purchaseResult.customerInfo.entitlements.active[selectedPlan.revenuecat_entitlement_id]) {
+        console.log('✅ SubscriptionManager: Entitlement is active');
+        
+        // Refresh subscription data
+        if (refreshSubscription) {
+          console.log('🔄 SubscriptionManager: Refreshing subscription data...');
+          refreshSubscription();
+        }
+        
+        // Close the modal
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+        
+        // Show success message
+        setError(null);
+        alert('Subscription activated successfully! Your tokens have been updated.');
+        
+      } else {
+        console.warn('⚠️ SubscriptionManager: Purchase completed but entitlement not active');
+        throw new Error('Purchase completed but subscription not activated. Please contact support.');
+      }
       
-    } catch (error) {
-      console.error('Subscription error:', error);
-      alert('Failed to initiate subscription. Please try again.');
+    } catch (error: any) {
+      console.error('❌ SubscriptionManager: Subscription error:', error);
+      
+      // Handle different types of errors
+      if (error.code === 'PURCHASE_CANCELLED') {
+        console.log('ℹ️ SubscriptionManager: Purchase was cancelled by user');
+        setError('Purchase was cancelled');
+      } else if (error.code === 'PAYMENT_PENDING') {
+        console.log('⏳ SubscriptionManager: Payment is pending');
+        setError('Payment is pending. Please wait for confirmation.');
+      } else if (error.code === 'PRODUCT_NOT_AVAILABLE') {
+        console.error('❌ SubscriptionManager: Product not available');
+        setError('This subscription plan is not available. Please try another plan or contact support.');
+      } else {
+        console.error('❌ SubscriptionManager: Unknown error:', error);
+        setError(error.message || 'Failed to process subscription. Please try again.');
+      }
     } finally {
       setSubscribing(null);
     }
@@ -199,6 +298,15 @@ export function SubscriptionManager({
                 <div className="text-2xl font-bold text-blue-600">{userSubscription.tokens}</div>
                 <div className="text-sm text-gray-500">tokens left</div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="p-6 border-b border-gray-200">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600 text-sm">{error}</p>
             </div>
           </div>
         )}

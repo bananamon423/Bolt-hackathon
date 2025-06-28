@@ -366,6 +366,7 @@ function MainApp() {
           currentPlan={subscription.plan}
           currentTokens={subscription.tokens}
           onClose={() => setShowSubscriptionManager(false)}
+          refreshSubscription={refreshSubscription}
         />
       )}
     </div>
