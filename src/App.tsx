@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import Purchases from '@revenuecat/purchases-js';
+import { Purchases } from '@revenuecat/purchases-js';
 import { useAuth } from './hooks/useAuth';
 import { useChats } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
