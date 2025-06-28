@@ -53,21 +53,43 @@ export function useAuth() {
     try {
       console.log('👤 useAuth: Fetching profile for user:', userId);
       
+      // Add timeout and better error handling for network issues
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
+        .abortSignal(controller.signal)
         .single();
+
+      clearTimeout(timeoutId);
 
       if (error) {
         console.error('❌ useAuth: Error fetching profile:', error);
+        
+        // Check if it's a network error
+        if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+          console.warn('⚠️ useAuth: Network connectivity issue detected. Profile will be set to null.');
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+        
         throw error;
       }
 
       console.log('✅ useAuth: Profile fetched successfully:', data?.username || 'No username');
       setProfile(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ useAuth: Profile fetch failed:', error);
+      
+      // Handle AbortError (timeout)
+      if (error.name === 'AbortError') {
+        console.warn('⚠️ useAuth: Profile fetch timed out. Setting profile to null.');
+      }
+      
       // Don't throw here, just set profile to null and continue
       setProfile(null);
     } finally {

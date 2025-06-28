@@ -15,7 +15,8 @@ const initializeRevenueCat = async () => {
 
   try {
     console.log('🚀 RevenueCat: Initializing SDK...');
-    await Purchases.configure(revenueCatPublicKey, null);
+    // Use empty string instead of null for anonymous users
+    await Purchases.configure(revenueCatPublicKey, "");
     console.log('✅ RevenueCat: SDK initialized successfully');
   } catch (error) {
     console.error('❌ RevenueCat: Failed to initialize SDK:', error);
