@@ -15,7 +15,7 @@ const initializeRevenueCat = async () => {
 
   try {
     console.log('🚀 RevenueCat: Initializing SDK...');
-    await Purchases.configure(revenueCatPublicKey);
+    await Purchases.configure(revenueCatPublicKey, null);
     console.log('✅ RevenueCat: SDK initialized successfully');
   } catch (error) {
     console.error('❌ RevenueCat: Failed to initialize SDK:', error);
