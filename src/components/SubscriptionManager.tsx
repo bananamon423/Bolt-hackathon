@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Crown, Zap, Check, X, CreditCard, Users, MessageSquare } from 'lucide-react';
-import * as Purchases from '@revenuecat/purchases-js';
+import Purchases from '@revenuecat/purchases-js';
 import { supabase } from '../lib/supabase';
 
 interface SubscriptionPlan {
