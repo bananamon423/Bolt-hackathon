@@ -15,7 +15,7 @@ import { SubscriptionManager } from './components/SubscriptionManager';
 import { TokenUsageIndicator } from './components/TokenUsageIndicator';
 import { AdminPage } from './pages/AdminPage';
 import { SharedChatPage } from './pages/SharedChatPage';
-import { Chat, LLMModel } from './lib/supabase';
+import { Chat, LLMModel, Profile } from './lib/supabase';
 import { supabase } from './lib/supabase';
 
 function MainApp() {
@@ -30,6 +30,7 @@ function MainApp() {
   const [thinkingModelName, setThinkingModelName] = useState<string>('');
   const [showSubscriptionManager, setShowSubscriptionManager] = useState(false);
   const [chatOwnerTokens, setChatOwnerTokens] = useState(0);
+  const [chatOwnerProfile, setChatOwnerProfile] = useState<Profile | null>(null);
 
   const { chats, loading: chatsLoading, createChat, updateChatTitle, deleteChat, canDeleteChat, deletingChatId } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
@@ -77,29 +78,40 @@ function MainApp() {
     }
   }, [chats, currentChat]);
 
-  // Fetch chat owner's tokens when currentChat changes
+  // Fetch chat owner's tokens and profile when currentChat changes
   useEffect(() => {
-    const fetchOwnerTokens = async () => {
+    const fetchOwnerData = async () => {
       if (currentChat?.owner_id) {
         try {
           const { data, error } = await supabase
             .from('profiles')
-            .select('tokens')
+            .select('tokens, username, profile_picture_url, id')
             .eq('id', currentChat.owner_id)
             .single();
           
           if (error) throw error;
           setChatOwnerTokens(data.tokens);
+          setChatOwnerProfile({
+            id: data.id,
+            username: data.username,
+            email: null, // Not needed for display
+            profile_picture_url: data.profile_picture_url,
+            credits_balance: 0, // Not needed for display
+            role: 'member', // Default role
+            created_at: '' // Not needed for display
+          });
         } catch (error) {
-          console.error('Error fetching chat owner tokens:', error);
+          console.error('Error fetching chat owner data:', error);
           setChatOwnerTokens(0);
+          setChatOwnerProfile(null);
         }
       } else {
         setChatOwnerTokens(subscription?.tokens || 0);
+        setChatOwnerProfile(profile);
       }
     };
-    fetchOwnerTokens();
-  }, [currentChat, subscription]);
+    fetchOwnerData();
+  }, [currentChat, subscription, profile]);
 
   const handleNewChat = async () => {
     const newChat = await createChat();
@@ -304,6 +316,7 @@ function MainApp() {
           onModelChange={handleModelChange}
           onlineUsers={onlineUsers}
           currentUserId={user.id}
+          chatOwnerProfile={chatOwnerProfile}
         />
 
         {currentChat ? (

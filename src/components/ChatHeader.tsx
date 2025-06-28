@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Edit3, Check, X, ChevronDown, Share2, Copy, ExternalLink } from 'lucide-react';
-import { Chat, LLMModel } from '../lib/supabase';
+import { Edit3, Check, X, ChevronDown, Share2, Copy, ExternalLink, Crown, User } from 'lucide-react';
+import { Chat, LLMModel, Profile } from '../lib/supabase';
 import { UserPresenceIndicator } from './UserPresenceIndicator';
 import { RealtimeStatus } from './RealtimeStatus';
 
@@ -12,6 +12,7 @@ interface ChatHeaderProps {
   onModelChange: (model: LLMModel) => void;
   onlineUsers: string[];
   currentUserId?: string;
+  chatOwnerProfile?: Profile | null;
 }
 
 export function ChatHeader({ 
@@ -21,7 +22,8 @@ export function ChatHeader({
   onUpdateTitle, 
   onModelChange,
   onlineUsers,
-  currentUserId
+  currentUserId,
+  chatOwnerProfile
 }: ChatHeaderProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(chat?.chat_title || '');
@@ -227,13 +229,47 @@ export function ChatHeader({
                 {copySuccess ? 'Copied!' : 'Copy'}
               </button>
             </div>
+
+            {/* Chat Owner Information */}
+            {chatOwnerProfile && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {chat.owner_id === currentUserId ? (
+                      <Crown className="w-4 h-4 text-yellow-600" />
+                    ) : (
+                      <User className="w-4 h-4 text-blue-600" />
+                    )}
+                    <span className="text-sm font-medium text-blue-900">
+                      {chat.owner_id === currentUserId ? 'You own this chat' : 'Chat Owner:'}
+                    </span>
+                  </div>
+                  {chat.owner_id !== currentUserId && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-teal-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                        {chatOwnerProfile.username?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <span className="text-sm text-blue-800 font-medium">
+                        {chatOwnerProfile.username || 'Unknown User'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-blue-700 mt-1">
+                  {chat.owner_id === currentUserId 
+                    ? 'AI usage in this chat will consume your tokens'
+                    : 'AI usage in this chat will consume the owner\'s tokens'
+                  }
+                </p>
+              </div>
+            )}
             
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
               <ExternalLink className="w-4 h-4" />
               <span>Anyone with this link can join and participate in the chat</span>
             </div>
             
-            <div className="flex justify-end mt-6">
+            <div className="flex justify-end">
               <button
                 onClick={() => setShowShareModal(false)}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"

@@ -10,7 +10,7 @@ import { ChatHeader } from '../components/ChatHeader';
 import { MessageList } from '../components/MessageList';
 import { MessageInput } from '../components/MessageInput';
 import { UserPresenceIndicator } from '../components/UserPresenceIndicator';
-import { LLMModel } from '../lib/supabase';
+import { LLMModel, Profile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 
 export function SharedChatPage() {
@@ -21,6 +21,8 @@ export function SharedChatPage() {
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [thinkingModelName, setThinkingModelName] = useState<string>('');
   const [joinSuccess, setJoinSuccess] = useState(false);
+  const [chatOwnerTokens, setChatOwnerTokens] = useState(0);
+  const [chatOwnerProfile, setChatOwnerProfile] = useState<Profile | null>(null);
 
   const { messages, sendMessage, sendAIMessage } = useMessages(chat?.id, profile);
   const { models } = useModels();
@@ -40,6 +42,38 @@ export function SharedChatPage() {
       setSelectedModel(gwizModel || allModels[0]);
     }
   }, [allModels, selectedModel]);
+
+  // Fetch chat owner's tokens and profile when chat changes
+  useEffect(() => {
+    const fetchOwnerData = async () => {
+      if (chat?.owner_id) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('tokens, username, profile_picture_url, id')
+            .eq('id', chat.owner_id)
+            .single();
+          
+          if (error) throw error;
+          setChatOwnerTokens(data.tokens);
+          setChatOwnerProfile({
+            id: data.id,
+            username: data.username,
+            email: null, // Not needed for display
+            profile_picture_url: data.profile_picture_url,
+            credits_balance: 0, // Not needed for display
+            role: 'member', // Default role
+            created_at: '' // Not needed for display
+          });
+        } catch (error) {
+          console.error('Error fetching chat owner data:', error);
+          setChatOwnerTokens(0);
+          setChatOwnerProfile(null);
+        }
+      }
+    };
+    fetchOwnerData();
+  }, [chat]);
 
   // Check membership when user and chat are available
   useEffect(() => {
@@ -113,6 +147,12 @@ export function SharedChatPage() {
 
   const handleSendAIMessage = async (content: string, modelId?: string, modelName?: string) => {
     if (user && chat) {
+      // Check if chat owner has tokens
+      if (chatOwnerTokens <= 0) {
+        alert('The chat owner has run out of tokens. Please upgrade to continue using AI features.');
+        return;
+      }
+
       setIsAIThinking(true);
       setThinkingModelName(modelName || selectedModel?.model_name || 'AI');
       
@@ -124,7 +164,33 @@ export function SharedChatPage() {
           throw new Error('No model selected');
         }
 
-        await sendAIMessage(content, targetModelId, targetModelName);
+        // Call the token-based LLM function
+        const { data: session } = await supabase.auth.getSession();
+        if (!session.session?.access_token) {
+          throw new Error('No auth token');
+        }
+
+        const response = await fetch(`${supabase.supabaseUrl}/functions/v1/ask-llm-with-tokens`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            chatId: chat.id,
+            message: content,
+            modelId: targetModelId,
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'AI request failed');
+        }
+
+        // Update local token count
+        setChatOwnerTokens(result.tokensRemaining);
         
         // Update last used LLM in database
         if (targetModelName) {
@@ -289,6 +355,7 @@ export function SharedChatPage() {
         onModelChange={handleModelChange}
         onlineUsers={onlineUsers}
         currentUserId={user.id}
+        chatOwnerProfile={chatOwnerProfile}
       />
 
       <MessageList
@@ -302,7 +369,7 @@ export function SharedChatPage() {
       <MessageInput
         onSendMessage={handleSendMessage}
         onSendAIMessage={handleSendAIMessage}
-        creditsBalance={profile.credits_balance}
+        creditsBalance={chatOwnerTokens}
         onlineUsers={onlineUsers}
         availableModels={allModels}
         disabled={!hasJoined}
