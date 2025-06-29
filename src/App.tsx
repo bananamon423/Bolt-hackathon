@@ -42,9 +42,13 @@ function MainApp() {
   // Configure RevenueCat only when user is authenticated
   useEffect(() => {
     const configureRevenueCat = async () => {
-      // Only configure if user is logged in and has an ID
+      if (authLoading) {
+        console.log('⏳ Auth still loading, waiting...');
+        return;
+      }
+
       if (!user?.id) {
-        console.log('🚫 RevenueCat: No authenticated user, skipping configuration');
+        console.warn('🚫 No authenticated user ID yet. Skipping RevenueCat configuration.');
         setRevenueCatConfigured(false);
         return;
       }
@@ -52,53 +56,35 @@ function MainApp() {
       console.log('🧠 Supabase user object:', user);
 
       const revenueCatPublicKey = import.meta.env.VITE_REVENUECAT_PUBLIC_KEY;
-      
-      if (!revenueCatPublicKey) {
-        console.warn('⚠️ RevenueCat: VITE_REVENUECAT_PUBLIC_KEY not found in environment variables');
-        setRevenueCatConfigured(false);
-        return;
-      }
 
-      // Check if the key is a valid RevenueCat key format
-      if (!revenueCatPublicKey.startsWith('rcb_')) {
-        console.warn('⚠️ RevenueCat: Invalid API key format. Please use a RevenueCat Web Billing API key that starts with "rcb_"');
+      if (!revenueCatPublicKey || !revenueCatPublicKey.startsWith('rcb_')) {
+        console.warn('⚠️ Invalid or missing RevenueCat public key');
         setRevenueCatConfigured(false);
         return;
       }
 
       try {
-        console.log('🔧 RevenueCat: Setting log level to DEBUG');
         Purchases.setLogLevel("DEBUG");
-        
         console.log('🔑 Configuring RevenueCat with user.id:', user.id);
-        
-        // Configure RevenueCat with the authenticated user's ID
+
         await Purchases.configure({
           apiKey: revenueCatPublicKey,
-          appUserID: user.id, // Always use the real Supabase user ID
+          appUserID: user.id,
         });
-        
-        console.log('✅ RevenueCat configured');
+
+        console.log('✅ RevenueCat configured successfully');
         setRevenueCatConfigured(true);
 
-        // Test fetching offerings
-        console.log('📦 RevenueCat: Testing offerings fetch...');
         const offerings = await Purchases.getOfferings();
-        console.log('✅ RevenueCat: Offerings fetched successfully:', offerings);
-        
+        console.log('📦 RevenueCat: Offerings fetched successfully:', offerings);
       } catch (error) {
         console.error('❌ Failed to configure RevenueCat:', error);
         setRevenueCatConfigured(false);
       }
     };
 
-    // Only run when user.id is available
-    if (user?.id) {
-      configureRevenueCat();
-    } else {
-      setRevenueCatConfigured(false);
-    }
-  }, [user?.id]); // Only depend on user.id
+    configureRevenueCat();
+  }, [authLoading, user?.id]);
 
   // Use models directly from the database
   const allModels = models;
