@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Purchases } from '@revenuecat/purchases-js';
 import { supabase } from '../lib/supabase';
 
 interface SubscriptionData {
@@ -21,6 +22,7 @@ export function useSubscription(userId: string | undefined) {
     }
 
     console.log('💳 useSubscription: Initializing subscription tracking for user:', userId);
+    initializeRevenueCat();
     fetchSubscription();
 
     // Subscribe to profile changes with enhanced logging
@@ -78,6 +80,70 @@ export function useSubscription(userId: string | undefined) {
       subscription_channel.unsubscribe();
     };
   }, [userId]);
+
+  const initializeRevenueCat = async () => {
+    if (!userId) return;
+
+    try {
+      console.log('🚀 useSubscription: Configuring RevenueCat for user:', userId);
+      
+      const revenueCatPublicKey = import.meta.env.VITE_REVENUECAT_PUBLIC_KEY;
+      if (!revenueCatPublicKey) {
+        console.warn('⚠️ useSubscription: VITE_REVENUECAT_PUBLIC_KEY not found');
+        return;
+      }
+
+      // Configure RevenueCat with user ID
+      await Purchases.configure({
+        apiKey: revenueCatPublicKey,
+        appUserID: userId,
+      });
+
+      console.log('✅ useSubscription: RevenueCat configured successfully');
+
+      // Sync RevenueCat entitlements with Supabase
+      await syncRevenueCatEntitlements();
+
+    } catch (error) {
+      console.error('❌ useSubscription: RevenueCat configuration failed:', error);
+    }
+  };
+
+  const syncRevenueCatEntitlements = async () => {
+    if (!userId) return;
+
+    try {
+      console.log('🔄 useSubscription: Syncing RevenueCat entitlements...');
+      
+      // Get customer info from RevenueCat
+      const customerInfo = await Purchases.getCustomerInfo();
+      console.log('📊 useSubscription: Customer info:', customerInfo);
+
+      // Extract active entitlements
+      const activeEntitlements = Object.keys(customerInfo.entitlements.active);
+      console.log('🎫 useSubscription: Active entitlements:', activeEntitlements);
+
+      // Update user subscription in Supabase
+      const { data, error } = await supabase.rpc('update_user_subscription', {
+        p_revenuecat_user_id: userId,
+        p_entitlement_ids: activeEntitlements,
+        p_subscription_status: activeEntitlements.length > 0 ? 'active' : 'inactive',
+        p_original_purchase_date: customerInfo.originalPurchaseDate || null,
+        p_expiration_date: null, // Will be set by RevenueCat webhook
+        p_is_sandbox: customerInfo.entitlements.active ? false : true // Detect sandbox
+      });
+
+      if (error) {
+        console.error('❌ useSubscription: Failed to update subscription:', error);
+        throw error;
+      }
+
+      console.log('✅ useSubscription: Subscription synced successfully:', data);
+
+    } catch (error) {
+      console.error('❌ useSubscription: Failed to sync entitlements:', error);
+    }
+  };
 
   const updateSubscriptionFromProfile = async (profileData: any) => {
     try {
@@ -197,6 +263,9 @@ export function useSubscription(userId: string | undefined) {
 
   const refreshSubscription = () => {
     console.log('💳 useSubscription: Manual refresh requested');
+    if (userId) {
+      syncRevenueCatEntitlements();
+    }
     fetchSubscription();
   };
 

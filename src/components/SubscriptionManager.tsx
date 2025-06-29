@@ -167,6 +167,23 @@ export function SubscriptionManager({
       if (purchaseResult.customerInfo.entitlements.active[selectedPlan.revenuecat_entitlement_id]) {
         console.log('✅ SubscriptionManager: Entitlement is active');
         
+        // Sync the subscription with Supabase
+        const { data, error } = await supabase.rpc('update_user_subscription', {
+          p_revenuecat_user_id: userId,
+          p_entitlement_ids: [selectedPlan.revenuecat_entitlement_id],
+          p_subscription_status: 'active',
+          p_original_purchase_date: purchaseResult.customerInfo.originalPurchaseDate || null,
+          p_expiration_date: null, // Will be updated by webhook
+          p_is_sandbox: false
+        });
+
+        if (error) {
+          console.error('❌ SubscriptionManager: Failed to sync subscription:', error);
+          throw new Error(`Purchase successful but sync failed: ${error.message}`);
+        }
+
+        console.log('✅ SubscriptionManager: Subscription synced:', data);
+        
         // Refresh subscription data
         if (refreshSubscription) {
           console.log('🔄 SubscriptionManager: Refreshing subscription data...');
