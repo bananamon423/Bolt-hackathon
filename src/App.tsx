@@ -68,7 +68,7 @@ function MainApp() {
         console.log('⚙️ RevenueCat: Configuring SDK...');
         await Purchases.configure({
           apiKey: revenueCatPublicKey,
-          appUserID: user?.id || null,
+          appUserID: user?.id || undefined,
         });
         
         console.log('✅ RevenueCat: SDK configured successfully');
@@ -138,10 +138,10 @@ function MainApp() {
         
         console.log('🚀 RevenueCat: Configuring SDK with user:', user?.id || 'anonymous');
         
-        // Configure RevenueCat with the current user ID (or null for anonymous)
+        // Configure RevenueCat with the current user ID (or undefined for anonymous)
         await Purchases.configure({
           apiKey: revenueCatPublicKey,
-          appUserID: user?.id || null, // Use user ID if logged in, null for anonymous
+          appUserID: user?.id || undefined, // Use user ID if logged in, undefined for anonymous
         });
         
         console.log('✅ RevenueCat: SDK configured successfully');
