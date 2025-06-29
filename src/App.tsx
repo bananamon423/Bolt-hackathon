@@ -32,6 +32,7 @@ function MainApp() {
   const [showSubscriptionManager, setShowSubscriptionManager] = useState(false);
   const [chatOwnerTokens, setChatOwnerTokens] = useState(0);
   const [chatOwnerProfile, setChatOwnerProfile] = useState<Profile | null>(null);
+  const [revenueCatSDKInitialized, setRevenueCatSDKInitialized] = useState(false);
   const [revenueCatConfigured, setRevenueCatConfigured] = useState(false);
 
   const { chats, loading: chatsLoading, createChat, updateChatTitle, deleteChat, canDeleteChat, deletingChatId } = useChats(user?.id);
@@ -39,52 +40,98 @@ function MainApp() {
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
 
-  // Configure RevenueCat only when user is authenticated
+  // Initialize RevenueCat SDK once on app startup (without user ID)
   useEffect(() => {
-    const configureRevenueCat = async () => {
-      if (authLoading) {
-        console.log('⏳ Auth still loading, waiting...');
-        return;
-      }
-
-      if (!user?.id) {
-        console.warn('🚫 No authenticated user ID yet. Skipping RevenueCat configuration.');
-        setRevenueCatConfigured(false);
-        return;
-      }
-
-      console.log('🧠 Supabase user object:', user);
+    const initializeRevenueCatSDK = async () => {
+      if (revenueCatSDKInitialized) return;
 
       const revenueCatPublicKey = import.meta.env.VITE_REVENUECAT_PUBLIC_KEY;
+      
+      if (!revenueCatPublicKey) {
+        console.error('❌ RevenueCat: VITE_REVENUECAT_PUBLIC_KEY not found in environment variables');
+        return;
+      }
 
-      if (!revenueCatPublicKey || !revenueCatPublicKey.startsWith('rcb_')) {
-        console.warn('⚠️ Invalid or missing RevenueCat public key');
-        setRevenueCatConfigured(false);
+      if (!revenueCatPublicKey.startsWith('rcb_')) {
+        console.warn('⚠️ RevenueCat: API key should start with "rcb_" for Web Billing. Current key starts with:', revenueCatPublicKey.substring(0, 4));
         return;
       }
 
       try {
+        console.log('🔑 Initializing RevenueCat SDK...');
         Purchases.setLogLevel("DEBUG");
-        console.log('🔑 Configuring RevenueCat with user.id:', user.id);
-
+        
         await Purchases.configure({
           apiKey: revenueCatPublicKey,
-          appUserID: user.id,
         });
-
-        console.log('✅ RevenueCat configured successfully');
-        setRevenueCatConfigured(true);
-
-        const offerings = await Purchases.getOfferings();
-        console.log('📦 RevenueCat: Offerings fetched successfully:', offerings);
+        
+        console.log('✅ RevenueCat SDK initialized successfully');
+        setRevenueCatSDKInitialized(true);
       } catch (error) {
-        console.error('❌ Failed to configure RevenueCat:', error);
+        console.error('❌ Failed to initialize RevenueCat SDK:', error);
+        setRevenueCatSDKInitialized(false);
+      }
+    };
+
+    initializeRevenueCatSDK();
+  }, []); // Run once on component mount
+
+  // Handle RevenueCat user login/logout based on authentication state
+  useEffect(() => {
+    const handleRevenueCatUserAuth = async () => {
+      if (!revenueCatSDKInitialized) {
+        console.log('⏳ RevenueCat SDK not initialized yet, waiting...');
+        return;
+      }
+
+      if (authLoading) {
+        console.log('⏳ Auth still loading, waiting for user ID to become available for RevenueCat login/logout...');
+        return;
+      }
+
+      try {
+        if (user?.id) {
+          // User is logged in - log them into RevenueCat
+          console.log('🔑 Attempting RevenueCat login for user ID:', user.id);
+          
+          const { customerInfo } = await Purchases.logIn(user.id);
+          
+          console.log('✅ RevenueCat logged in with user ID:', user.id);
+          console.log('👤 RevenueCat customer info:', customerInfo);
+          setRevenueCatConfigured(true);
+
+          // Test fetching offerings after successful login
+          try {
+            const offerings = await Purchases.getOfferings();
+            console.log('📦 RevenueCat: Offerings fetched successfully:', offerings);
+            console.log('🎯 RevenueCat: Current offering:', offerings.current);
+            console.log('📋 RevenueCat: All offerings:', Object.keys(offerings.all));
+          } catch (offeringsError) {
+            console.warn('⚠️ RevenueCat: Failed to fetch offerings after login:', offeringsError);
+          }
+        } else {
+          // User is logged out - log them out of RevenueCat
+          console.log('🚫 No authenticated user ID. Attempting RevenueCat logout...');
+          
+          const { customerInfo } = await Purchases.logOut();
+          
+          console.log('✅ RevenueCat logged out successfully');
+          console.log('👤 RevenueCat anonymous customer info:', customerInfo);
+          setRevenueCatConfigured(false);
+        }
+      } catch (error) {
+        console.error('❌ Failed RevenueCat user authentication operation:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        });
         setRevenueCatConfigured(false);
       }
     };
 
-    configureRevenueCat();
-  }, [authLoading, user?.id]);
+    handleRevenueCatUserAuth();
+  }, [authLoading, user?.id, revenueCatSDKInitialized]);
 
   // Use models directly from the database
   const allModels = models;
@@ -304,10 +351,18 @@ function MainApp() {
     isLoading,
     user: user ? 'Present' : 'None',
     profile: profile ? 'Present' : 'None',
+    revenueCatSDKInitialized,
     revenueCatConfigured
   });
 
   if (isLoading) {
+    const getRevenueCatStatus = () => {
+      if (!revenueCatSDKInitialized) return 'Initializing SDK...';
+      if (authLoading) return 'Waiting for auth...';
+      if (!revenueCatConfigured) return 'Waiting for user login...';
+      return 'Configured';
+    };
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -316,7 +371,7 @@ function MainApp() {
           <p className="text-xs text-gray-400 mt-2">
             Auth: {authLoading ? 'Loading...' : 'Ready'} | 
             Subscription: {subscriptionLoading ? 'Loading...' : 'Ready'} |
-            RevenueCat: {revenueCatConfigured ? 'Configured' : 'Waiting for auth...'}
+            RevenueCat: {getRevenueCatStatus()}
           </p>
         </div>
       </div>
