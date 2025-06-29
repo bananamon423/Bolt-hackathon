@@ -79,6 +79,31 @@ function MainApp() {
     configureRevenueCat();
   }, [user]);
 
+  // Temporary test for RevenueCat API key and offerings
+  useEffect(() => {
+    const testRevenueCatOfferings = async () => {
+      if (revenueCatConfigured) {
+        console.log('🚀 Testing RevenueCat API key and fetching offerings...');
+        try {
+          const offerings = await Purchases.getOfferings();
+          console.log('✅ RevenueCat Offerings fetched successfully:', offerings);
+          console.log('📦 Available offerings:', Object.keys(offerings.all));
+          console.log('🎯 Current offering:', offerings.current);
+        } catch (error) {
+          console.error('❌ Failed to fetch RevenueCat Offerings:', error);
+          console.error('❌ Error details:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+          });
+        }
+      }
+    };
+
+    // Run the test after RevenueCat is configured
+    testRevenueCatOfferings();
+  }, [revenueCatConfigured]);
+
   // Use models directly from the database
   const allModels = models;
 
@@ -403,7 +428,7 @@ function MainApp() {
         )}
       </div>
 
-      {/* Subscription Manager Modal - Remove revenueCatConfigured check */}
+      {/* Subscription Manager Modal */}
       {showSubscriptionManager && subscription && (
         <SubscriptionManager
           userId={user.id}
