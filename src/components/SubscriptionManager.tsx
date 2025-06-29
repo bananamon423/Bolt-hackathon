@@ -26,6 +26,7 @@ interface SubscriptionManagerProps {
   currentTokens?: number;
   onClose: () => void;
   refreshSubscription?: () => void;
+  revenueCatConfigured: boolean;
 }
 
 export function SubscriptionManager({ 
@@ -33,7 +34,8 @@ export function SubscriptionManager({
   currentPlan = 'free_plan', 
   currentTokens = 0,
   onClose,
-  refreshSubscription
+  refreshSubscription,
+  revenueCatConfigured
 }: SubscriptionManagerProps) {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [userSubscription, setUserSubscription] = useState<UserSubscription | null>(null);
@@ -99,6 +101,16 @@ export function SubscriptionManager({
     try {
       console.log('💳 SubscriptionManager: Starting subscription process for plan:', planId);
       
+      // Check if RevenueCat is configured
+      if (!revenueCatConfigured) {
+        throw new Error('RevenueCat is still configuring. Please wait a moment and try again.');
+      }
+
+      // Check if Purchases.getOfferings is available
+      if (typeof Purchases.getOfferings !== 'function') {
+        throw new Error('RevenueCat SDK not properly configured. Please refresh the page and try again.');
+      }
+      
       // Find the selected plan
       const selectedPlan = plans.find(plan => plan.plan_id === planId);
       if (!selectedPlan) {
@@ -106,11 +118,6 @@ export function SubscriptionManager({
       }
 
       console.log('💳 SubscriptionManager: Selected plan:', selectedPlan);
-
-      // Check if Purchases.getOfferings is available
-      if (typeof Purchases.getOfferings !== 'function') {
-        throw new Error('RevenueCat SDK not properly configured. Please refresh the page and try again.');
-      }
 
       console.log('💳 SubscriptionManager: Getting offerings from RevenueCat...');
       
@@ -286,6 +293,19 @@ export function SubscriptionManager({
           </div>
         </div>
 
+        {/* RevenueCat Configuration Status */}
+        {!revenueCatConfigured && (
+          <div className="p-6 bg-yellow-50 border-b border-yellow-200">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+              <div>
+                <h3 className="font-medium text-yellow-800">Loading subscription options...</h3>
+                <p className="text-sm text-yellow-700">Setting up payment system, please wait a moment.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Current Usage */}
         {userSubscription && (
           <div className="p-6 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-gray-200">
@@ -359,7 +379,7 @@ export function SubscriptionManager({
                   ) : (
                     <button
                       onClick={() => handleSubscribe(plan.plan_id)}
-                      disabled={subscribing === plan.plan_id}
+                      disabled={subscribing === plan.plan_id || !revenueCatConfigured}
                       className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                         plan.plan_id === 'free_plan'
                           ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -372,6 +392,8 @@ export function SubscriptionManager({
                         <>
                           {plan.plan_id === 'free_plan' ? (
                             'Downgrade'
+                          ) : !revenueCatConfigured ? (
+                            'Loading...'
                           ) : (
                             <>
                               <CreditCard className="w-5 h-5" />

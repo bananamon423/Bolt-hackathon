@@ -403,14 +403,15 @@ function MainApp() {
         )}
       </div>
 
-      {/* Subscription Manager Modal */}
-      {showSubscriptionManager && subscription && revenueCatConfigured && (
+      {/* Subscription Manager Modal - Remove revenueCatConfigured check */}
+      {showSubscriptionManager && subscription && (
         <SubscriptionManager
           userId={user.id}
           currentPlan={subscription.plan}
           currentTokens={subscription.tokens}
           onClose={() => setShowSubscriptionManager(false)}
           refreshSubscription={refreshSubscription}
+          revenueCatConfigured={revenueCatConfigured}
         />
       )}
     </div>
