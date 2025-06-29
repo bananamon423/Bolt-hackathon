@@ -42,12 +42,14 @@ function MainApp() {
   // Configure RevenueCat only when user is authenticated
   useEffect(() => {
     const configureRevenueCat = async () => {
-      // Only configure if user is logged in
+      // Only configure if user is logged in and has an ID
       if (!user?.id) {
         console.log('🚫 RevenueCat: No authenticated user, skipping configuration');
         setRevenueCatConfigured(false);
         return;
       }
+
+      console.log('🧠 Supabase user object:', user);
 
       const revenueCatPublicKey = import.meta.env.VITE_REVENUECAT_PUBLIC_KEY;
       
@@ -65,10 +67,10 @@ function MainApp() {
       }
 
       try {
-        console.log('🚀 RevenueCat: Setting log level to DEBUG');
+        console.log('🔧 RevenueCat: Setting log level to DEBUG');
         Purchases.setLogLevel("DEBUG");
         
-        console.log('🚀 RevenueCat: Configuring SDK with user ID:', user.id);
+        console.log('🔑 Configuring RevenueCat with user.id:', user.id);
         
         // Configure RevenueCat with the authenticated user's ID
         await Purchases.configure({
@@ -76,7 +78,7 @@ function MainApp() {
           appUserID: user.id, // Always use the real Supabase user ID
         });
         
-        console.log('✅ RevenueCat configured with user.id:', user.id);
+        console.log('✅ RevenueCat configured');
         setRevenueCatConfigured(true);
 
         // Test fetching offerings
@@ -90,9 +92,13 @@ function MainApp() {
       }
     };
 
-    // Configure RevenueCat when user changes (login/logout)
-    configureRevenueCat();
-  }, [user?.id]); // Only depend on user.id, not the entire user object
+    // Only run when user.id is available
+    if (user?.id) {
+      configureRevenueCat();
+    } else {
+      setRevenueCatConfigured(false);
+    }
+  }, [user?.id]); // Only depend on user.id
 
   // Use models directly from the database
   const allModels = models;
