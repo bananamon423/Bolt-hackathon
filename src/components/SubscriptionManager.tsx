@@ -107,6 +107,13 @@ export function SubscriptionManager({
 
       console.log('💳 SubscriptionManager: Selected plan:', selectedPlan);
 
+      // Check if Purchases.getOfferings is available
+      if (typeof Purchases.getOfferings !== 'function') {
+        throw new Error('RevenueCat SDK not properly configured. Please refresh the page and try again.');
+      }
+
+      console.log('💳 SubscriptionManager: Getting offerings from RevenueCat...');
+      
       // Get available packages from RevenueCat
       const offerings = await Purchases.getOfferings();
       console.log('💳 SubscriptionManager: Available offerings:', offerings);

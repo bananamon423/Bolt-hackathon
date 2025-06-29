@@ -32,6 +32,7 @@ function MainApp() {
   const [showSubscriptionManager, setShowSubscriptionManager] = useState(false);
   const [chatOwnerTokens, setChatOwnerTokens] = useState(0);
   const [chatOwnerProfile, setChatOwnerProfile] = useState<Profile | null>(null);
+  const [revenueCatConfigured, setRevenueCatConfigured] = useState(false);
 
   const { chats, loading: chatsLoading, createChat, updateChatTitle, deleteChat, canDeleteChat, deletingChatId } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
@@ -55,6 +56,9 @@ function MainApp() {
       }
 
       try {
+        console.log('🚀 RevenueCat: Setting log level to DEBUG');
+        Purchases.setLogLevel("DEBUG");
+        
         console.log('🚀 RevenueCat: Configuring SDK with user:', user?.id || 'anonymous');
         
         // Configure RevenueCat with the current user ID (or null for anonymous)
@@ -64,8 +68,10 @@ function MainApp() {
         });
         
         console.log('✅ RevenueCat: SDK configured successfully');
+        setRevenueCatConfigured(true);
       } catch (error) {
         console.error('❌ RevenueCat: Failed to configure SDK:', error);
+        setRevenueCatConfigured(false);
       }
     };
 
@@ -290,7 +296,8 @@ function MainApp() {
     subscriptionLoading,
     isLoading,
     user: user ? 'Present' : 'None',
-    profile: profile ? 'Present' : 'None'
+    profile: profile ? 'Present' : 'None',
+    revenueCatConfigured
   });
 
   if (isLoading) {
@@ -301,7 +308,8 @@ function MainApp() {
           <p className="text-gray-600">Loading application...</p>
           <p className="text-xs text-gray-400 mt-2">
             Auth: {authLoading ? 'Loading...' : 'Ready'} | 
-            Subscription: {subscriptionLoading ? 'Loading...' : 'Ready'}
+            Subscription: {subscriptionLoading ? 'Loading...' : 'Ready'} |
+            RevenueCat: {revenueCatConfigured ? 'Configured' : 'Configuring...'}
           </p>
         </div>
       </div>
@@ -396,7 +404,7 @@ function MainApp() {
       </div>
 
       {/* Subscription Manager Modal */}
-      {showSubscriptionManager && subscription && (
+      {showSubscriptionManager && subscription && revenueCatConfigured && (
         <SubscriptionManager
           userId={user.id}
           currentPlan={subscription.plan}
