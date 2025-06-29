@@ -10,6 +10,7 @@ interface SubscriptionPlan {
   tokens_per_month: number;
   price_monthly: number;
   revenuecat_entitlement_id: string;
+  revenuecat_product_id: string;
   is_active: boolean;
 }
 
@@ -103,14 +104,9 @@ export function SubscriptionManager({
       
       // Check if RevenueCat is configured
       if (!revenueCatConfigured) {
-        throw new Error('RevenueCat is still configuring. Please wait a moment and try again.');
+        throw new Error('RevenueCat is not properly configured. Please refresh the page and try again.');
       }
 
-      // Check if Purchases.getOfferings is available
-      if (typeof Purchases.getOfferings !== 'function') {
-        throw new Error('RevenueCat SDK not properly configured. Please refresh the page and try again.');
-      }
-      
       // Find the selected plan
       const selectedPlan = plans.find(plan => plan.plan_id === planId);
       if (!selectedPlan) {
@@ -119,106 +115,89 @@ export function SubscriptionManager({
 
       console.log('💳 SubscriptionManager: Selected plan:', selectedPlan);
 
-      console.log('💳 SubscriptionManager: Getting offerings from RevenueCat...');
-      
-      // Get available packages from RevenueCat
-      const offerings = await Purchases.getOfferings();
-      console.log('💳 SubscriptionManager: Available offerings:', offerings);
+      // For Web Billing, we need to use the product ID to initiate purchase
+      // Note: Web Billing doesn't use getOfferings() - products are managed via dashboard
+      console.log('💳 SubscriptionManager: Initiating Web Billing purchase...');
+      console.log('🛒 Product ID:', selectedPlan.revenuecat_product_id);
 
-      // Find the package that matches our plan
-      let packageToPurchase = null;
-      
-      // Look through all offerings for a package with matching identifier
-      for (const offering of Object.values(offerings.all)) {
-        for (const pkg of offering.availablePackages) {
-          if (pkg.identifier === planId || pkg.product.identifier === planId) {
-            packageToPurchase = pkg;
-            break;
+      try {
+        // For Web Billing, we use purchaseProduct instead of purchasePackage
+        const purchaseResult = await Purchases.purchaseProduct(selectedPlan.revenuecat_product_id);
+        
+        console.log('✅ SubscriptionManager: Purchase completed:', purchaseResult);
+
+        // Check if the purchase was successful by looking at customer info
+        const customerInfo = await Purchases.getCustomerInfo();
+        console.log('👤 SubscriptionManager: Updated customer info:', customerInfo);
+
+        // Check if the entitlement is now active
+        const hasEntitlement = customerInfo.entitlements.active[selectedPlan.revenuecat_entitlement_id];
+        
+        if (hasEntitlement) {
+          console.log('✅ SubscriptionManager: Entitlement is active');
+          
+          // Sync the subscription with Supabase
+          const { data, error } = await supabase.rpc('update_user_subscription', {
+            p_revenuecat_user_id: userId,
+            p_entitlement_ids: [selectedPlan.revenuecat_entitlement_id],
+            p_subscription_status: 'active',
+            p_original_purchase_date: customerInfo.originalPurchaseDate || null,
+            p_expiration_date: null, // Will be updated by webhook
+            p_is_sandbox: false
+          });
+
+          if (error) {
+            console.error('❌ SubscriptionManager: Failed to sync subscription:', error);
+            throw new Error(`Purchase successful but sync failed: ${error.message}`);
           }
-        }
-        if (packageToPurchase) break;
-      }
 
-      if (!packageToPurchase) {
-        console.warn('⚠️ SubscriptionManager: Package not found in RevenueCat, using fallback');
-        // If we can't find the exact package, try to use the current offering's default
-        const currentOffering = offerings.current;
-        if (currentOffering && currentOffering.availablePackages.length > 0) {
-          // Try to find a package that might match by price or name
-          packageToPurchase = currentOffering.availablePackages.find(pkg => 
-            pkg.product.title.toLowerCase().includes(selectedPlan.name.toLowerCase())
-          ) || currentOffering.availablePackages[0];
-        }
-      }
-
-      if (!packageToPurchase) {
-        throw new Error(`No RevenueCat package found for plan: ${planId}. Please ensure the plan is configured in RevenueCat.`);
-      }
-
-      console.log('💳 SubscriptionManager: Found package to purchase:', packageToPurchase);
-
-      // Attempt the purchase
-      console.log('💳 SubscriptionManager: Initiating purchase...');
-      const purchaseResult = await Purchases.purchasePackage(packageToPurchase);
-      
-      console.log('✅ SubscriptionManager: Purchase completed:', purchaseResult);
-
-      // Check if the purchase was successful
-      if (purchaseResult.customerInfo.entitlements.active[selectedPlan.revenuecat_entitlement_id]) {
-        console.log('✅ SubscriptionManager: Entitlement is active');
-        
-        // Sync the subscription with Supabase
-        const { data, error } = await supabase.rpc('update_user_subscription', {
-          p_revenuecat_user_id: userId,
-          p_entitlement_ids: [selectedPlan.revenuecat_entitlement_id],
-          p_subscription_status: 'active',
-          p_original_purchase_date: purchaseResult.customerInfo.originalPurchaseDate || null,
-          p_expiration_date: null, // Will be updated by webhook
-          p_is_sandbox: false
-        });
-
-        if (error) {
-          console.error('❌ SubscriptionManager: Failed to sync subscription:', error);
-          throw new Error(`Purchase successful but sync failed: ${error.message}`);
-        }
-
-        console.log('✅ SubscriptionManager: Subscription synced:', data);
-        
-        // Refresh subscription data
-        if (refreshSubscription) {
-          console.log('🔄 SubscriptionManager: Refreshing subscription data...');
-          refreshSubscription();
+          console.log('✅ SubscriptionManager: Subscription synced:', data);
+          
+          // Refresh subscription data
+          if (refreshSubscription) {
+            console.log('🔄 SubscriptionManager: Refreshing subscription data...');
+            refreshSubscription();
+          }
+          
+          // Close the modal
+          setTimeout(() => {
+            onClose();
+          }, 1000);
+          
+          // Show success message
+          setError(null);
+          alert('Subscription activated successfully! Your tokens have been updated.');
+          
+        } else {
+          console.warn('⚠️ SubscriptionManager: Purchase completed but entitlement not active');
+          throw new Error('Purchase completed but subscription not activated. Please contact support.');
         }
         
-        // Close the modal
-        setTimeout(() => {
-          onClose();
-        }, 1000);
+      } catch (purchaseError) {
+        console.error('❌ SubscriptionManager: Purchase error:', purchaseError);
         
-        // Show success message
-        setError(null);
-        alert('Subscription activated successfully! Your tokens have been updated.');
-        
-      } else {
-        console.warn('⚠️ SubscriptionManager: Purchase completed but entitlement not active');
-        throw new Error('Purchase completed but subscription not activated. Please contact support.');
+        // Handle different types of purchase errors
+        if (purchaseError.code === 'PURCHASE_CANCELLED') {
+          console.log('ℹ️ SubscriptionManager: Purchase was cancelled by user');
+          setError('Purchase was cancelled');
+        } else if (purchaseError.code === 'PAYMENT_PENDING') {
+          console.log('⏳ SubscriptionManager: Payment is pending');
+          setError('Payment is pending. Please wait for confirmation.');
+        } else if (purchaseError.code === 'PRODUCT_NOT_AVAILABLE') {
+          console.error('❌ SubscriptionManager: Product not available');
+          setError('This subscription plan is not available. Please try another plan or contact support.');
+        } else {
+          console.error('❌ SubscriptionManager: Unknown purchase error:', purchaseError);
+          setError(purchaseError.message || 'Failed to process subscription. Please try again.');
+        }
+        throw purchaseError;
       }
       
     } catch (error: any) {
       console.error('❌ SubscriptionManager: Subscription error:', error);
       
-      // Handle different types of errors
-      if (error.code === 'PURCHASE_CANCELLED') {
-        console.log('ℹ️ SubscriptionManager: Purchase was cancelled by user');
-        setError('Purchase was cancelled');
-      } else if (error.code === 'PAYMENT_PENDING') {
-        console.log('⏳ SubscriptionManager: Payment is pending');
-        setError('Payment is pending. Please wait for confirmation.');
-      } else if (error.code === 'PRODUCT_NOT_AVAILABLE') {
-        console.error('❌ SubscriptionManager: Product not available');
-        setError('This subscription plan is not available. Please try another plan or contact support.');
-      } else {
-        console.error('❌ SubscriptionManager: Unknown error:', error);
+      // Only set error if it wasn't already set by purchase error handling
+      if (!error.message?.includes('cancelled') && !error.message?.includes('pending')) {
         setError(error.message || 'Failed to process subscription. Please try again.');
       }
     } finally {
@@ -316,8 +295,8 @@ export function SubscriptionManager({
             <div className="flex items-center gap-3">
               <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
               <div>
-                <h3 className="font-medium text-yellow-800">Loading subscription options...</h3>
-                <p className="text-sm text-yellow-700">Setting up payment system, please wait a moment.</p>
+                <h3 className="font-medium text-yellow-800">Payment system not ready</h3>
+                <p className="text-sm text-yellow-700">RevenueCat Web Billing is not configured. Please refresh the page and try again.</p>
               </div>
             </div>
           </div>
@@ -410,7 +389,7 @@ export function SubscriptionManager({
                           {plan.plan_id === 'free_plan' ? (
                             'Downgrade'
                           ) : !revenueCatConfigured ? (
-                            'Loading...'
+                            'Payment system loading...'
                           ) : (
                             <>
                               <CreditCard className="w-5 h-5" />
@@ -445,6 +424,11 @@ export function SubscriptionManager({
             <p className="mt-2">
               Need a custom plan? <a href="mailto:support@example.com" className="text-blue-600 hover:underline">Contact us</a>
             </p>
+            {revenueCatConfigured && (
+              <p className="mt-2 text-xs text-green-600">
+                ✅ Secure payments powered by RevenueCat Web Billing
+              </p>
+            )}
           </div>
         </div>
       </div>
