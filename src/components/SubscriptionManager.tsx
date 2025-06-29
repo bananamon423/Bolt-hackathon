@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Crown, Zap, Check, X, CreditCard, Users, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Crown, Zap, Check, X, CreditCard, Users, MessageSquare, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Purchases } from '@revenuecat/purchases-js';
 import { supabase } from '../lib/supabase';
-import { isRevenueCatInitialized } from '../lib/initializeRevenueCatWebBilling';
+import { isRevenueCatInitialized, getRevenueCatStatus } from '../lib/initializeRevenueCatWebBilling';
 
 interface SubscriptionPlan {
   id: string;
@@ -103,15 +103,21 @@ export function SubscriptionManager({
     try {
       console.log('💳 SubscriptionManager: Starting subscription process for plan:', planId);
       
-      // Check if RevenueCat is properly initialized
+      // Check RevenueCat status
+      const rcStatus = getRevenueCatStatus();
+      console.log('📊 RevenueCat status check:', rcStatus);
+      
+      // Comprehensive RevenueCat readiness check
       if (!revenueCatConfigured || !isRevenueCatInitialized()) {
         throw new Error('Payment system is not ready. Please refresh the page and try again.');
       }
 
-      // Validate user ID
-      if (!userId || userId === 'undefined') {
+      // Validate user ID thoroughly
+      if (!userId || userId === 'undefined' || userId === 'null' || userId.trim() === '') {
         throw new Error('User authentication required. Please sign in and try again.');
       }
+
+      console.log('👤 SubscriptionManager: User ID validated:', userId);
 
       // Find the selected plan
       const selectedPlan = plans.find(plan => plan.plan_id === planId);
@@ -131,11 +137,13 @@ export function SubscriptionManager({
 
       try {
         // For Web Billing, we use purchaseProduct instead of purchasePackage
+        console.log('🛒 SubscriptionManager: Calling Purchases.purchaseProduct...');
         const purchaseResult = await Purchases.purchaseProduct(selectedPlan.revenuecat_product_id);
         
         console.log('✅ SubscriptionManager: Purchase completed:', purchaseResult);
 
         // Check if the purchase was successful by looking at customer info
+        console.log('👤 SubscriptionManager: Getting updated customer info...');
         const customerInfo = await Purchases.getCustomerInfo();
         console.log('👤 SubscriptionManager: Updated customer info:', customerInfo);
 
@@ -146,6 +154,7 @@ export function SubscriptionManager({
           console.log('✅ SubscriptionManager: Entitlement is active');
           
           // Sync the subscription with Supabase
+          console.log('🔄 SubscriptionManager: Syncing subscription with Supabase...');
           const { data, error } = await supabase.rpc('update_user_subscription', {
             p_revenuecat_user_id: userId,
             p_entitlement_ids: [selectedPlan.revenuecat_entitlement_id],
@@ -267,7 +276,11 @@ export function SubscriptionManager({
   };
 
   // Check if user is missing or invalid
-  const hasValidUser = userId && userId !== 'undefined' && userId !== 'null';
+  const hasValidUser = userId && userId !== 'undefined' && userId !== 'null' && userId.trim() !== '';
+  
+  // Get detailed RevenueCat status
+  const rcStatus = getRevenueCatStatus();
+  const isRevenueCatReady = revenueCatConfigured && isRevenueCatInitialized() && !rcStatus.isInitializing;
 
   if (loading) {
     return (
@@ -309,20 +322,33 @@ export function SubscriptionManager({
               <div>
                 <h3 className="font-medium text-red-800">⚠️ Waiting for login</h3>
                 <p className="text-sm text-red-700">Please ensure you are signed in to purchase a subscription.</p>
+                <p className="text-xs text-red-600 mt-1">User ID: {userId || 'Not available'}</p>
               </div>
             </div>
           </div>
         )}
 
         {/* RevenueCat Configuration Status */}
-        {!revenueCatConfigured && (
+        {!isRevenueCatReady && (
           <div className="p-6 bg-yellow-50 border-b border-yellow-200">
             <div className="flex items-center gap-3">
               <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-              <div>
+              <div className="flex-1">
                 <h3 className="font-medium text-yellow-800">Payment system loading...</h3>
                 <p className="text-sm text-yellow-700">RevenueCat Web Billing is initializing. Please wait a moment.</p>
+                <div className="text-xs text-yellow-600 mt-1 space-y-1">
+                  <p>Configured: {revenueCatConfigured ? '✅' : '❌'}</p>
+                  <p>Initialized: {isRevenueCatInitialized() ? '✅' : '❌'}</p>
+                  <p>Initializing: {rcStatus.isInitializing ? '⏳' : '✅'}</p>
+                </div>
               </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="p-2 hover:bg-yellow-100 rounded-lg transition-colors"
+                title="Refresh page"
+              >
+                <RefreshCw className="w-4 h-4 text-yellow-600" />
+              </button>
             </div>
           </div>
         )}
@@ -402,9 +428,8 @@ export function SubscriptionManager({
                       onClick={() => handleSubscribe(plan.plan_id)}
                       disabled={
                         subscribing === plan.plan_id || 
-                        !revenueCatConfigured || 
-                        !hasValidUser ||
-                        !isRevenueCatInitialized()
+                        !isRevenueCatReady || 
+                        !hasValidUser
                       }
                       className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                         plan.plan_id === 'free_plan'
@@ -420,7 +445,7 @@ export function SubscriptionManager({
                             'Downgrade'
                           ) : !hasValidUser ? (
                             '⚠️ Waiting for login'
-                          ) : !revenueCatConfigured || !isRevenueCatInitialized() ? (
+                          ) : !isRevenueCatReady ? (
                             'Payment system loading...'
                           ) : (
                             <>
@@ -456,9 +481,14 @@ export function SubscriptionManager({
             <p className="mt-2">
               Need a custom plan? <a href="mailto:support@example.com" className="text-blue-600 hover:underline">Contact us</a>
             </p>
-            {revenueCatConfigured && hasValidUser && isRevenueCatInitialized() && (
+            {isRevenueCatReady && hasValidUser && (
               <p className="mt-2 text-xs text-green-600">
                 ✅ Secure payments powered by RevenueCat Web Billing
+              </p>
+            )}
+            {!isRevenueCatReady && (
+              <p className="mt-2 text-xs text-yellow-600">
+                ⏳ Payment system initializing...
               </p>
             )}
           </div>

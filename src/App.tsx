@@ -17,7 +17,7 @@ import { AdminPage } from './pages/AdminPage';
 import { SharedChatPage } from './pages/SharedChatPage';
 import { Chat, LLMModel, Profile } from './lib/supabase';
 import { supabase } from './lib/supabase';
-import { initializeRevenueCatWebBilling, isRevenueCatInitialized } from './lib/initializeRevenueCatWebBilling';
+import { initializeRevenueCatWebBilling, isRevenueCatInitialized, getRevenueCatStatus } from './lib/initializeRevenueCatWebBilling';
 
 function MainApp() {
   const location = useLocation();
@@ -33,19 +33,21 @@ function MainApp() {
   const [chatOwnerTokens, setChatOwnerTokens] = useState(0);
   const [chatOwnerProfile, setChatOwnerProfile] = useState<Profile | null>(null);
   const [revenueCatConfigured, setRevenueCatConfigured] = useState(false);
+  const [revenueCatError, setRevenueCatError] = useState<string | null>(null);
 
   const { chats, loading: chatsLoading, createChat, updateChatTitle, deleteChat, canDeleteChat, deletingChatId } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
 
-  // 🔧 RevenueCat Web Billing SDK Initialization
+  // 🔧 Robust RevenueCat Web Billing SDK Initialization
   useEffect(() => {
     const initRevenueCat = async () => {
       // Skip if already initialized
       if (isRevenueCatInitialized()) {
-        console.log('✅ RevenueCat: Already initialized');
+        console.log('✅ RevenueCat: Already initialized (useEffect check)');
         setRevenueCatConfigured(true);
+        setRevenueCatError(null);
         return;
       }
 
@@ -55,32 +57,41 @@ function MainApp() {
         return;
       }
 
-      console.log('🚀 RevenueCat: Starting initialization process...');
+      console.log('🚀 RevenueCat: Starting robust initialization process...');
       console.log('👤 Auth state:', {
         authLoading,
         hasUser: !!user,
         userId: user?.id,
-        userIdType: typeof user?.id
+        userIdType: typeof user?.id,
+        userIdLength: user?.id?.length
       });
 
+      const status = getRevenueCatStatus();
+      console.log('📊 RevenueCat status:', status);
+
       try {
+        setRevenueCatError(null); // Clear any previous errors
+        
         const result = await initializeRevenueCatWebBilling();
         
         if (result.success) {
-          console.log('✅ RevenueCat: Initialization successful');
+          console.log('🎉 RevenueCat: Initialization successful in useEffect');
           setRevenueCatConfigured(true);
+          setRevenueCatError(null);
         } else {
-          console.error('❌ RevenueCat: Initialization failed:', result.error);
+          console.error('❌ RevenueCat: Initialization failed in useEffect:', result.error);
           setRevenueCatConfigured(false);
+          setRevenueCatError(result.error || 'Unknown initialization error');
           
           // Show user-friendly error for missing user
-          if (result.error?.includes('No valid user ID')) {
-            console.log('💡 RevenueCat: Will retry when user is available');
+          if (result.error?.includes('User ID unavailable')) {
+            console.log('💡 RevenueCat: Will retry when user becomes available');
           }
         }
-      } catch (error) {
-        console.error('❌ RevenueCat: Unexpected initialization error:', error);
+      } catch (error: any) {
+        console.error('❌ RevenueCat: Unexpected initialization error in useEffect:', error);
         setRevenueCatConfigured(false);
+        setRevenueCatError(error.message || 'Unexpected initialization error');
       }
     };
 
@@ -306,12 +317,14 @@ function MainApp() {
     user: user ? 'Present' : 'None',
     profile: profile ? 'Present' : 'None',
     revenueCatConfigured,
-    revenueCatInitialized: isRevenueCatInitialized()
+    revenueCatInitialized: isRevenueCatInitialized(),
+    revenueCatError
   });
 
   if (isLoading) {
     const getRevenueCatStatus = () => {
       if (authLoading) return 'Waiting for auth...';
+      if (revenueCatError) return `Error: ${revenueCatError}`;
       if (!isRevenueCatInitialized()) return 'Initializing...';
       if (!revenueCatConfigured) return 'Configuration failed';
       return 'Ready';
@@ -319,14 +332,19 @@ function MainApp() {
 
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading application...</p>
-          <p className="text-xs text-gray-400 mt-2">
-            Auth: {authLoading ? 'Loading...' : 'Ready'} | 
-            Subscription: {subscriptionLoading ? 'Loading...' : 'Ready'} |
-            RevenueCat: {getRevenueCatStatus()}
-          </p>
+          <p className="text-gray-600 mb-2">Loading application...</p>
+          <div className="text-xs text-gray-400 space-y-1">
+            <p>Auth: {authLoading ? 'Loading...' : 'Ready'}</p>
+            <p>Subscription: {subscriptionLoading ? 'Loading...' : 'Ready'}</p>
+            <p>RevenueCat: {getRevenueCatStatus()}</p>
+          </div>
+          {revenueCatError && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-600 text-xs">{revenueCatError}</p>
+            </div>
+          )}
         </div>
       </div>
     );
