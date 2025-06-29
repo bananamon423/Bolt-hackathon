@@ -40,6 +40,80 @@ function MainApp() {
   const { models } = useModels();
   const onlineUsers = usePresence(currentChat?.id, user?.id);
 
+  // 🚨 DEVELOPMENT ONLY: RevenueCat Error Injection Test
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      const testRevenueCatErrors = async () => {
+        console.log('🧪 [DEV ONLY] Starting RevenueCat Error Injection Test...');
+        console.log('🎯 This test intentionally triggers errors to verify error logging');
+        
+        try {
+          // Test 1: Configure with invalid API key
+          console.log('🔧 Test 1: Configuring RevenueCat with INVALID API key...');
+          
+          await Purchases.configure({
+            apiKey: 'invalid_api_key_12345',
+          });
+          
+          console.log('⚠️ Test 1: Unexpected success with invalid API key');
+          
+        } catch (configError) {
+          console.log('✅ Test 1: Expected error caught during configure:');
+          console.error('📋 Configure Error Details:', {
+            message: configError.message,
+            code: configError.code,
+            name: configError.name,
+            stack: configError.stack
+          });
+        }
+
+        try {
+          // Test 2: Attempt login with fake user ID
+          console.log('🔧 Test 2: Attempting RevenueCat login with fake user ID...');
+          
+          const loginResult = await Purchases.logIn('fake_user_id_12345');
+          
+          console.log('⚠️ Test 2: Unexpected success with fake user ID:', loginResult);
+          
+        } catch (loginError) {
+          console.log('✅ Test 2: Expected error caught during login:');
+          console.error('📋 Login Error Details:', {
+            message: loginError.message,
+            code: loginError.code,
+            name: loginError.name,
+            stack: loginError.stack
+          });
+        }
+
+        try {
+          // Test 3: Try to get offerings without proper configuration
+          console.log('🔧 Test 3: Attempting to get offerings after invalid configuration...');
+          
+          const offerings = await Purchases.getOfferings();
+          
+          console.log('⚠️ Test 3: Unexpected success getting offerings:', offerings);
+          
+        } catch (offeringsError) {
+          console.log('✅ Test 3: Expected error caught during getOfferings:');
+          console.error('📋 Offerings Error Details:', {
+            message: offeringsError.message,
+            code: offeringsError.code,
+            name: offeringsError.name,
+            stack: offeringsError.stack
+          });
+        }
+
+        console.log('🏁 [DEV ONLY] RevenueCat Error Injection Test Complete');
+        console.log('💡 Check the console above for error details and verify they are being logged properly');
+      };
+
+      // Run the error test after a short delay to let other initialization complete
+      const timeoutId = setTimeout(testRevenueCatErrors, 2000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, []); // Run once on component mount in development only
+
   // Initialize RevenueCat SDK once on app startup (without user ID)
   useEffect(() => {
     const initializeRevenueCatSDK = async () => {
