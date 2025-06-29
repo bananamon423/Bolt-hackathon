@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Crown, Zap, Check, X, CreditCard, Users, MessageSquare } from 'lucide-react';
+import { Crown, Zap, Check, X, CreditCard, Users, MessageSquare, AlertTriangle } from 'lucide-react';
 import { Purchases } from '@revenuecat/purchases-js';
 import { supabase } from '../lib/supabase';
+import { isRevenueCatInitialized } from '../lib/initializeRevenueCatWebBilling';
 
 interface SubscriptionPlan {
   id: string;
@@ -102,9 +103,14 @@ export function SubscriptionManager({
     try {
       console.log('💳 SubscriptionManager: Starting subscription process for plan:', planId);
       
-      // Check if RevenueCat is configured
-      if (!revenueCatConfigured) {
-        throw new Error('RevenueCat is not properly configured. Please refresh the page and try again.');
+      // Check if RevenueCat is properly initialized
+      if (!revenueCatConfigured || !isRevenueCatInitialized()) {
+        throw new Error('Payment system is not ready. Please refresh the page and try again.');
+      }
+
+      // Validate user ID
+      if (!userId || userId === 'undefined') {
+        throw new Error('User authentication required. Please sign in and try again.');
       }
 
       // Find the selected plan
@@ -115,8 +121,11 @@ export function SubscriptionManager({
 
       console.log('💳 SubscriptionManager: Selected plan:', selectedPlan);
 
-      // For Web Billing, we need to use the product ID to initiate purchase
-      // Note: Web Billing doesn't use getOfferings() - products are managed via dashboard
+      // Validate plan has required RevenueCat fields
+      if (!selectedPlan.revenuecat_product_id) {
+        throw new Error('Plan configuration error: missing product ID');
+      }
+
       console.log('💳 SubscriptionManager: Initiating Web Billing purchase...');
       console.log('🛒 Product ID:', selectedPlan.revenuecat_product_id);
 
@@ -173,7 +182,7 @@ export function SubscriptionManager({
           throw new Error('Purchase completed but subscription not activated. Please contact support.');
         }
         
-      } catch (purchaseError) {
+      } catch (purchaseError: any) {
         console.error('❌ SubscriptionManager: Purchase error:', purchaseError);
         
         // Handle different types of purchase errors
@@ -257,6 +266,9 @@ export function SubscriptionManager({
     return nextReset.toLocaleDateString();
   };
 
+  // Check if user is missing or invalid
+  const hasValidUser = userId && userId !== 'undefined' && userId !== 'null';
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -289,14 +301,27 @@ export function SubscriptionManager({
           </div>
         </div>
 
+        {/* User Authentication Warning */}
+        {!hasValidUser && (
+          <div className="p-6 bg-red-50 border-b border-red-200">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+              <div>
+                <h3 className="font-medium text-red-800">⚠️ Waiting for login</h3>
+                <p className="text-sm text-red-700">Please ensure you are signed in to purchase a subscription.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* RevenueCat Configuration Status */}
         {!revenueCatConfigured && (
           <div className="p-6 bg-yellow-50 border-b border-yellow-200">
             <div className="flex items-center gap-3">
               <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
               <div>
-                <h3 className="font-medium text-yellow-800">Payment system not ready</h3>
-                <p className="text-sm text-yellow-700">RevenueCat Web Billing is not configured. Please refresh the page and try again.</p>
+                <h3 className="font-medium text-yellow-800">Payment system loading...</h3>
+                <p className="text-sm text-yellow-700">RevenueCat Web Billing is initializing. Please wait a moment.</p>
               </div>
             </div>
           </div>
@@ -375,7 +400,12 @@ export function SubscriptionManager({
                   ) : (
                     <button
                       onClick={() => handleSubscribe(plan.plan_id)}
-                      disabled={subscribing === plan.plan_id || !revenueCatConfigured}
+                      disabled={
+                        subscribing === plan.plan_id || 
+                        !revenueCatConfigured || 
+                        !hasValidUser ||
+                        !isRevenueCatInitialized()
+                      }
                       className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                         plan.plan_id === 'free_plan'
                           ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -388,7 +418,9 @@ export function SubscriptionManager({
                         <>
                           {plan.plan_id === 'free_plan' ? (
                             'Downgrade'
-                          ) : !revenueCatConfigured ? (
+                          ) : !hasValidUser ? (
+                            '⚠️ Waiting for login'
+                          ) : !revenueCatConfigured || !isRevenueCatInitialized() ? (
                             'Payment system loading...'
                           ) : (
                             <>
@@ -424,7 +456,7 @@ export function SubscriptionManager({
             <p className="mt-2">
               Need a custom plan? <a href="mailto:support@example.com" className="text-blue-600 hover:underline">Contact us</a>
             </p>
-            {revenueCatConfigured && (
+            {revenueCatConfigured && hasValidUser && isRevenueCatInitialized() && (
               <p className="mt-2 text-xs text-green-600">
                 ✅ Secure payments powered by RevenueCat Web Billing
               </p>

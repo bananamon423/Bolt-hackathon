@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Purchases } from '@revenuecat/purchases-js';
 import { useAuth } from './hooks/useAuth';
 import { useChats } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
@@ -18,6 +17,7 @@ import { AdminPage } from './pages/AdminPage';
 import { SharedChatPage } from './pages/SharedChatPage';
 import { Chat, LLMModel, Profile } from './lib/supabase';
 import { supabase } from './lib/supabase';
+import { initializeRevenueCatWebBilling, isRevenueCatInitialized } from './lib/initializeRevenueCatWebBilling';
 
 function MainApp() {
   const location = useLocation();
@@ -33,7 +33,6 @@ function MainApp() {
   const [chatOwnerTokens, setChatOwnerTokens] = useState(0);
   const [chatOwnerProfile, setChatOwnerProfile] = useState<Profile | null>(null);
   const [revenueCatConfigured, setRevenueCatConfigured] = useState(false);
-  const [revenueCatInitialized, setRevenueCatInitialized] = useState(false);
 
   const { chats, loading: chatsLoading, createChat, updateChatTitle, deleteChat, canDeleteChat, deletingChatId } = useChats(user?.id);
   const { messages, sendMessage, sendAIMessage } = useMessages(currentChat?.id, profile);
@@ -42,122 +41,51 @@ function MainApp() {
 
   // 🔧 RevenueCat Web Billing SDK Initialization
   useEffect(() => {
-    const initializeRevenueCat = async () => {
-      // Prevent double initialization
-      if (revenueCatInitialized) {
-        console.log('🔄 RevenueCat already initialized, skipping...');
+    const initRevenueCat = async () => {
+      // Skip if already initialized
+      if (isRevenueCatInitialized()) {
+        console.log('✅ RevenueCat: Already initialized');
+        setRevenueCatConfigured(true);
         return;
       }
 
-      const revenueCatPublicKey = import.meta.env.VITE_REVENUECAT_PUBLIC_KEY;
-      
-      // Validate API key presence
-      if (!revenueCatPublicKey) {
-        console.error('❌ RevenueCat: VITE_REVENUECAT_PUBLIC_KEY environment variable is missing!');
-        console.error('💡 Please add VITE_REVENUECAT_PUBLIC_KEY=rcb_sb_... to your .env file');
-        return;
-      }
-
-      // Validate Web Billing API key format
-      if (!revenueCatPublicKey.startsWith('rcb_')) {
-        console.error('❌ RevenueCat: Invalid API key format for Web Billing!');
-        console.error('💡 Web Billing API keys should start with "rcb_"');
-        console.error('🔑 Current key starts with:', revenueCatPublicKey.substring(0, 4));
-        return;
-      }
-
-      // Wait for user to be fully loaded before configuring
+      // Wait for auth to complete before attempting initialization
       if (authLoading) {
-        console.log('⏳ RevenueCat: Waiting for user authentication to complete...');
+        console.log('⏳ RevenueCat: Waiting for auth to complete...');
         return;
       }
 
-      // Ensure we have a valid user ID
-      if (!user?.id || user.id === 'undefined') {
-        console.log('⏳ RevenueCat: No valid user ID available, waiting...');
-        console.log('👤 Current user state:', { 
-          hasUser: !!user, 
-          userId: user?.id, 
-          authLoading 
-        });
-        return;
-      }
+      console.log('🚀 RevenueCat: Starting initialization process...');
+      console.log('👤 Auth state:', {
+        authLoading,
+        hasUser: !!user,
+        userId: user?.id,
+        userIdType: typeof user?.id
+      });
 
       try {
-        console.log('🚀 RevenueCat: Initializing Web Billing SDK...');
-        console.log('🔑 API Key:', revenueCatPublicKey.substring(0, 10) + '...');
-        console.log('👤 User ID:', user.id);
-
-        // Set debug logging for development
-        if (import.meta.env.DEV) {
-          Purchases.setLogLevel("DEBUG");
-          console.log('🔧 RevenueCat: Debug logging enabled for development');
+        const result = await initializeRevenueCatWebBilling();
+        
+        if (result.success) {
+          console.log('✅ RevenueCat: Initialization successful');
+          setRevenueCatConfigured(true);
+        } else {
+          console.error('❌ RevenueCat: Initialization failed:', result.error);
+          setRevenueCatConfigured(false);
+          
+          // Show user-friendly error for missing user
+          if (result.error?.includes('No valid user ID')) {
+            console.log('💡 RevenueCat: Will retry when user is available');
+          }
         }
-
-        // Configure RevenueCat with user ID
-        await Purchases.configure({
-          apiKey: revenueCatPublicKey,
-          appUserID: user.id, // Use Supabase user ID
-        });
-
-        console.log('✅ RevenueCat: SDK configured successfully');
-        setRevenueCatInitialized(true);
-        setRevenueCatConfigured(true);
-
-        // Get customer info to verify configuration
-        try {
-          const customerInfo = await Purchases.getCustomerInfo();
-          console.log('👤 RevenueCat: Customer info retrieved:', {
-            originalAppUserId: customerInfo.originalAppUserId,
-            activeEntitlements: Object.keys(customerInfo.entitlements.active),
-            hasActiveEntitlements: Object.keys(customerInfo.entitlements.active).length > 0
-          });
-        } catch (customerError) {
-          console.warn('⚠️ RevenueCat: Could not retrieve customer info:', customerError.message);
-        }
-
-        // Note: For Web Billing, we don't call getOfferings() as offerings are managed via dashboard
-        console.log('💡 RevenueCat: Using Web Billing - offerings managed via dashboard');
-
       } catch (error) {
-        console.error('❌ RevenueCat: Failed to configure SDK:', error);
-        console.error('📋 Error details:', {
-          message: error.message,
-          code: error.code,
-          name: error.name
-        });
+        console.error('❌ RevenueCat: Unexpected initialization error:', error);
         setRevenueCatConfigured(false);
-        setRevenueCatInitialized(false);
       }
     };
 
-    initializeRevenueCat();
-  }, [authLoading, user?.id, revenueCatInitialized]);
-
-  // 🧪 Development-only error injection test
-  useEffect(() => {
-    if (import.meta.env.DEV && revenueCatConfigured) {
-      const testRevenueCatFunctionality = async () => {
-        console.log('🧪 [DEV] Testing RevenueCat Web Billing functionality...');
-        
-        try {
-          // Test customer info retrieval
-          const customerInfo = await Purchases.getCustomerInfo();
-          console.log('✅ [DEV] Customer info test passed:', customerInfo.originalAppUserId);
-          
-          // Note: We don't test getOfferings() for Web Billing as it's not the primary method
-          console.log('💡 [DEV] Web Billing uses dashboard-managed offerings, not getOfferings()');
-          
-        } catch (error) {
-          console.error('❌ [DEV] RevenueCat functionality test failed:', error);
-        }
-      };
-
-      // Run test after a delay to ensure everything is initialized
-      const timeoutId = setTimeout(testRevenueCatFunctionality, 1000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [revenueCatConfigured]);
+    initRevenueCat();
+  }, [authLoading, user?.id]); // Re-run when auth state changes
 
   // Use models directly from the database
   const allModels = models;
@@ -378,13 +306,13 @@ function MainApp() {
     user: user ? 'Present' : 'None',
     profile: profile ? 'Present' : 'None',
     revenueCatConfigured,
-    revenueCatInitialized
+    revenueCatInitialized: isRevenueCatInitialized()
   });
 
   if (isLoading) {
     const getRevenueCatStatus = () => {
       if (authLoading) return 'Waiting for auth...';
-      if (!revenueCatInitialized) return 'Initializing...';
+      if (!isRevenueCatInitialized()) return 'Initializing...';
       if (!revenueCatConfigured) return 'Configuration failed';
       return 'Ready';
     };
