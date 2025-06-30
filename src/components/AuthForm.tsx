@@ -177,8 +177,9 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
                 {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
               </button>
             </div>
+
             
-            </div>
+            ></div>
             <div 
               className="absolute w-4 h-4 bg-blue-200 rounded-full opacity-40 transform -rotate-12 transition-all duration-500"
               style={{
