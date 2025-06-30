@@ -69,26 +69,14 @@ export function ChatSidebar({
       collapsed ? 'w-16' : 'w-80'
     }`}
     style={{
-      background: '#f5e6c8',
-      position: 'relative'
+      backgroundImage: 'url(/Folder.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat'
     }}>
-      {/* Folder tab at the top */}
-      <div 
-        className="absolute -top-6 left-8 w-24 h-8 rounded-t-lg border-l-2 border-t-2 border-r-2 border-amber-800"
-        style={{
-          background: '#f5e6c8',
-          clipPath: 'polygon(0 100%, 0 20%, 15% 0, 85% 0, 100% 20%, 100% 100%)'
-        }}
-      >
-      </div>
       
-      {/* Main folder body with border */}
-      <div 
-        className="h-full border-2 border-amber-800 rounded-tr-lg"
-        style={{
-          background: '#f5e6c8'
-        }}
-      >
+      {/* Main folder content area */}
+      <div className="h-full flex flex-col">
         {/* Header */}
         <div className="p-4 flex items-center justify-between relative">
           {!collapsed && (
@@ -216,7 +204,7 @@ export function ChatSidebar({
                 plan={subscription.plan}
                 maxTokens={subscription.maxTokens}
                 onUpgradeClick={onUpgradeClick}
-                className="bg-amber-100/80 border border-amber-400/50 shadow-sm"
+                className="bg-amber-100/90 border border-amber-400/50 shadow-sm backdrop-blur-sm"
               />
             </div>
           )}
@@ -224,7 +212,7 @@ export function ChatSidebar({
           {profile?.role === 'admin' && (
             <button
               onClick={() => window.open('/admin', '_blank')}
-              className={`w-full text-amber-900 hover:text-amber-800 hover:bg-amber-200/50 rounded-lg transition-colors flex items-center gap-2 font-medium ${
+              className={`w-full text-amber-900 hover:text-amber-800 hover:bg-amber-200/50 rounded-lg transition-colors flex items-center gap-2 font-medium backdrop-blur-sm ${
                 collapsed ? 'p-3 justify-center' : 'py-2 px-3'
               }`}
             >
@@ -235,7 +223,7 @@ export function ChatSidebar({
           
           <button
             onClick={onSignOut}
-            className={`w-full text-amber-900 hover:text-amber-800 hover:bg-amber-200/50 rounded-lg transition-colors flex items-center gap-2 font-medium ${
+            className={`w-full text-amber-900 hover:text-amber-800 hover:bg-amber-200/50 rounded-lg transition-colors flex items-center gap-2 font-medium backdrop-blur-sm ${
               collapsed ? 'p-3 justify-center' : 'py-2 px-3'
             }`}
           >
