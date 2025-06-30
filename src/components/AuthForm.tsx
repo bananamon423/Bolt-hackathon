@@ -38,13 +38,10 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
     <div 
       className="min-h-screen flex items-center justify-center px-4 font-patrick"
       style={{
-        backgroundImage: `
-          radial-gradient(circle at 20% 50%, rgba(139, 69, 19, 0.3) 0%, transparent 50%),
-          radial-gradient(circle at 80% 20%, rgba(160, 82, 45, 0.2) 0%, transparent 50%),
-          radial-gradient(circle at 40% 80%, rgba(101, 67, 33, 0.2) 0%, transparent 50%),
-          linear-gradient(135deg, #8B4513 0%, #A0522D 25%, #CD853F 50%, #D2B48C 75%, #F5DEB3 100%)
-        `,
-        backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%',
+        backgroundImage: 'url(/CorkBoard.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
         backgroundAttachment: 'fixed'
       }}
     >
@@ -189,6 +186,12 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               ★
             </div>
           </div>
+
+          {/* Push pins for authentic bulletin board feel */}
+          <div className="absolute -top-2 left-1/4 w-4 h-4 bg-red-500 rounded-full shadow-lg border-2 border-red-600 transform rotate-12"></div>
+          <div className="absolute -top-2 right-1/4 w-4 h-4 bg-blue-500 rounded-full shadow-lg border-2 border-blue-600 transform -rotate-12"></div>
+          <div className="absolute -bottom-2 left-1/3 w-4 h-4 bg-green-500 rounded-full shadow-lg border-2 border-green-600 transform rotate-45"></div>
+          <div className="absolute -bottom-2 right-1/3 w-4 h-4 bg-yellow-500 rounded-full shadow-lg border-2 border-yellow-600 transform -rotate-45"></div>
         </div>
       </div>
     </div>
