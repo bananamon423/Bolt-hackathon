@@ -52,7 +52,7 @@ export function useMentions({
             type: 'ai',
             name: model.model_name, // Use model_name for matching
             displayName: modelConfig.name,
-            description: `${modelConfig.description} • ${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
+            description: `${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
             modelId: model.api_identifier as OpenRouterModelId,
             icon: modelConfig.icon,
             color: modelConfig.color,
