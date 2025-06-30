@@ -45,13 +45,20 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
         backgroundAttachment: 'fixed'
       }}
     >
-      {/* Bolt Logo in top right corner */}
+      {/* Bolt Logo in top right corner with hyperlink */}
       <div className="absolute top-6 right-6 z-10">
-        <img 
-          src="/black_circle_360x360.png" 
-          alt="Powered by Bolt" 
-          className="w-16 h-16 opacity-80 hover:opacity-100 transition-opacity duration-200"
-        />
+        <a 
+          href="https://bolt.new/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block hover:scale-110 transition-transform duration-200"
+        >
+          <img 
+            src="/black_circle_360x360.png" 
+            alt="Powered by Bolt" 
+            className="w-16 h-16 opacity-80 hover:opacity-100 transition-opacity duration-200"
+          />
+        </a>
       </div>
 
       <div className="max-w-lg w-full">
