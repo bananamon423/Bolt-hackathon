@@ -128,7 +128,7 @@ export function ChatSidebar({
             >
               <div className={`p-3 rounded-lg transition-colors ${
                 currentChat?.id === chat.id
-                  ? 'bg-blue-50 border border-blue-200'
+                  ? 'bg-green-50 border border-blue-200'
                   : 'bg-white hover:bg-gray-50 border border-gray-200'
               }`}>
                 {!collapsed && (
