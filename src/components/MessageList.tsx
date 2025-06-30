@@ -154,7 +154,7 @@ export function MessageList({
                     isDeleted 
                       ? 'opacity-50 border-2 border-dashed border-gray-300 bg-white/80'
                       : isAI
-                      ? `bg-white/95 border-2 border-teal-300 rounded-bl-none text-gray-800 shadow-md`
+                      ? `bg-gradient-to-br from-yellow-200 to-teal-100 border-2 border-teal-300 rounded-bl-none text-gray-800 shadow-md`
                       : isCurrentUser
                       ? 'bg-gradient-to-br from-blue-500 to-teal-500 text-white shadow-md'
                       : 'bg-white/95 text-gray-900 border border-gray-200 shadow-md'
