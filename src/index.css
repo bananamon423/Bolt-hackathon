@@ -1,3 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Apply Patrick Hand font globally */
+@layer base {
+  * {
+    font-family: 'Patrick Hand', cursive;
+  }
+}

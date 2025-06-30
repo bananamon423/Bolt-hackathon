@@ -121,14 +121,14 @@ export function ChatSidebar({
                 <MessageSquare className="w-6 h-6 text-white" />
               </div>
               <div className="flex flex-col">
-                <h1 className="text-xl font-bold text-gray-900">AI Workspace</h1>
+                <h1 className="text-xl font-bold text-gray-900 font-patrick">AI Workspace</h1>
                 {profile && (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 bg-gradient-to-br from-blue-500 to-teal-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">
                       {profile.username?.[0]?.toUpperCase() || 'U'}
                     </div>
-                    <span className="text-sm text-gray-600">{profile.username || 'User'}</span>
-                    <span className="text-xs text-gray-500">• {profile.credits_balance} credits</span>
+                    <span className="text-sm text-gray-600 font-patrick">{profile.username || 'User'}</span>
+                    <span className="text-xs text-gray-500 font-patrick">• {profile.credits_balance} credits</span>
                   </div>
                 )}
               </div>
@@ -202,10 +202,10 @@ export function ChatSidebar({
                   <>
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 pr-2">
-                        <h3 className="text-sm font-bold text-gray-800 leading-tight mb-1 font-handwriting">
+                        <h3 className="text-sm font-bold text-gray-800 leading-tight mb-1 font-patrick">
                           {chat.chat_title.length > 25 ? chat.chat_title.substring(0, 25) + '...' : chat.chat_title}
                         </h3>
-                        <div className="text-xs text-gray-600 font-medium">
+                        <div className="text-xs text-gray-600 font-medium font-patrick">
                           {new Date(chat.updated_at).toLocaleDateString('en-US', { 
                             month: 'short', 
                             day: 'numeric' 
@@ -227,7 +227,7 @@ export function ChatSidebar({
                     {onlineUsers.length > 0 && (
                       <div className="flex items-center gap-1 mt-2">
                         <Users className="w-3 h-3 text-gray-600" />
-                        <span className="text-xs text-gray-600 font-medium">{onlineUsers.length} online</span>
+                        <span className="text-xs text-gray-600 font-medium font-patrick">{onlineUsers.length} online</span>
                       </div>
                     )}
                   </>
@@ -241,7 +241,7 @@ export function ChatSidebar({
                         setShowDeleteConfirm(chat.id);
                         setShowChatMenu(null);
                       }}
-                      className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 rounded-lg font-medium"
+                      className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 rounded-lg font-medium font-patrick"
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete Chat
@@ -265,7 +265,7 @@ export function ChatSidebar({
             <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-8 h-4 bg-white bg-opacity-60 rounded-sm shadow-sm border border-gray-200"></div>
             
             <Plus className="w-6 h-6 text-emerald-700" />
-            {!collapsed && <span className="text-sm font-bold text-emerald-800">New Chat</span>}
+            {!collapsed && <span className="text-sm font-bold text-emerald-800 font-patrick">New Chat</span>}
           </button>
         </div>
 
@@ -286,7 +286,7 @@ export function ChatSidebar({
           {profile?.role === 'admin' && (
             <button
               onClick={() => window.open('/admin', '_blank')}
-              className={`w-full text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2 ${
+              className={`w-full text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2 font-patrick ${
                 collapsed ? 'p-2 justify-center' : 'py-2 px-3'
               }`}
             >
@@ -297,7 +297,7 @@ export function ChatSidebar({
           
           <button
             onClick={onSignOut}
-            className={`w-full text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2 ${
+            className={`w-full text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2 font-patrick ${
               collapsed ? 'p-2 justify-center' : 'py-2 px-3'
             }`}
           >
@@ -316,16 +316,16 @@ export function ChatSidebar({
                 <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Delete Chat</h3>
-                <p className="text-sm text-gray-600">This action cannot be undone</p>
+                <h3 className="text-lg font-semibold text-gray-900 font-patrick">Delete Chat</h3>
+                <p className="text-sm text-gray-600 font-patrick">This action cannot be undone</p>
               </div>
             </div>
             
             <div className="bg-gray-50 rounded-lg p-3 mb-4">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-gray-700 font-patrick">
                 <strong>Chat:</strong> {chats.find(c => c.id === showDeleteConfirm)?.chat_title}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1 font-patrick">
                 All messages, members, and related data will be permanently deleted.
               </p>
             </div>
@@ -333,7 +333,7 @@ export function ChatSidebar({
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-patrick"
                 disabled={deletingChatId === showDeleteConfirm}
               >
                 Cancel
@@ -341,7 +341,7 @@ export function ChatSidebar({
               <button
                 onClick={() => handleDeleteChat(showDeleteConfirm)}
                 disabled={deletingChatId === showDeleteConfirm}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 font-patrick"
               >
                 {deletingChatId === showDeleteConfirm ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
