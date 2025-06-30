@@ -305,6 +305,14 @@ export function MessageInput({
   };
 
   return (
+    <div className="flex gap-2 justify-center mb-2">
+  {[...Array(6)].map((_, i) => (
+    <div
+      key={i}
+      className="w-4 h-2 bg-black rounded-full"
+    />
+  ))}
+</div>
     <div className="border-t-2 border-dotted border-black p-4 relative">
       {showCreditsWarning && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
