@@ -69,9 +69,9 @@ export function ChatSidebar({
       collapsed ? 'w-16' : 'w-80'
     }`}
     style={{
-      backgroundImage: 'url(/Folder.png)',
+      backgroundImage: 'url(/Folder copy.png)',
       backgroundSize: 'cover',
-      backgroundPosition: 'left center',
+      backgroundPosition: 'center center',
       backgroundRepeat: 'no-repeat',
       minHeight: '100vh'
     }}>
