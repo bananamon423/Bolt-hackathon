@@ -403,7 +403,7 @@ export function MessageInput({
             disabled={!message.trim() || disabled || isLoading || isSending}
             className={`px-4 py-4 text-white rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 ${
               isAIMessage
-                ? 'bg-blue-500 border-2 border-blue-700 focus:ring-blue-200'
+                ? 'bg-purple-500 border-2 border-purple-700 focus:ring-purple-200'
                 : 'bg-orange-500 border-2 border-orange-700 focus:ring-orange-200'
             }`}
           >
