@@ -398,7 +398,7 @@ export function MessageInput({
             </span>
           </button>
           
-         <button
+          <button
   type="submit"
   disabled={!message.trim() || disabled || isLoading || isSending}
   className={`w-10 h-10 bg-orange-500 text-white rounded-full 
