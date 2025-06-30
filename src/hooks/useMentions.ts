@@ -65,7 +65,7 @@ export function useMentions({
             type: 'ai',
             name: model.model_name, // Use model_name for matching
             displayName: model.model_name,
-            description: `${model.model_name} • ${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
+            description: `${model.cost_per_token} credit${model.cost_per_token > 1 ? 's' : ''}`,
             icon: '🤖',
             color: 'from-purple-500 to-pink-500',
             cost: model.cost_per_token
