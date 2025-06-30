@@ -36,7 +36,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center px-4 font-patrick"
+      className="min-h-screen flex items-center justify-center px-4 font-patrick relative"
       style={{
         backgroundImage: 'url(/CorkBoard.png)',
         backgroundSize: 'cover',
@@ -45,6 +45,15 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
         backgroundAttachment: 'fixed'
       }}
     >
+      {/* Bolt Logo in top right corner */}
+      <div className="absolute top-6 right-6 z-10">
+        <img 
+          src="/black_circle_360x360.png" 
+          alt="Powered by Bolt" 
+          className="w-16 h-16 opacity-80 hover:opacity-100 transition-opacity duration-200"
+        />
+      </div>
+
       <div className="max-w-lg w-full">
         {/* Torn Paper Container - Dynamic height based on form type */}
         <div 
