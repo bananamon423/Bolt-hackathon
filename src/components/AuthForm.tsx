@@ -56,8 +56,8 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             backgroundRepeat: 'no-repeat',
             filter: 'drop-shadow(0 15px 35px rgba(0,0,0,0.4))',
             transform: isSignUp 
-            ? 'rotate(-1deg) translate(0px, 10px)'  // transform for sign-up
-            : 'rotate(-1deg) translate(0px, 20px)',   // transform for other case
+            ? 'rotate(-1deg) translate(0px, 100px)'  // transform for sign-up
+            : 'rotate(-1deg) translate(0px, 2px)',   // transform for other case
             aspectRatio: isSignUp ? '3/5' : '3/4.2', // Taller for sign-up
             minHeight: isSignUp ? '850px' : '750px', // More height for sign-up
             width: '100%'
