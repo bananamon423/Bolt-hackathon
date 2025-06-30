@@ -46,9 +46,9 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
       }}
     >
       <div className="max-w-lg w-full">
-        {/* Torn Paper Container using actual image - made bigger */}
+        {/* Torn Paper Container - Dynamic height based on form type */}
         <div 
-          className="relative"
+          className="relative transition-all duration-500 ease-in-out"
           style={{
             backgroundImage: 'url(/TornPaper.png)',
             backgroundSize: 'contain',
@@ -56,16 +56,20 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             backgroundRepeat: 'no-repeat',
             filter: 'drop-shadow(0 15px 35px rgba(0,0,0,0.4))',
             transform: 'rotate(-1deg)',
-            aspectRatio: '3/4.2',
-            minHeight: '750px',
+            aspectRatio: isSignUp ? '3/5' : '3/4.2', // Taller for sign-up
+            minHeight: isSignUp ? '850px' : '750px', // More height for sign-up
             width: '100%'
           }}
         >
-          {/* Content overlay positioned within the paper bounds with more generous padding */}
-          <div className="absolute inset-0 p-12 pt-20 pb-16" style={{
-            // More generous margins to ensure content fits well within the paper
-            margin: '4% 6% 6% 6%'
-          }}>
+          {/* Content overlay with dynamic padding */}
+          <div 
+            className="absolute inset-0 transition-all duration-500 ease-in-out"
+            style={{
+              padding: isSignUp ? '48px 48px 64px 48px' : '48px 48px 64px 48px', // Consistent padding
+              paddingTop: isSignUp ? '80px' : '80px', // Consistent top padding
+              margin: isSignUp ? '4% 6% 8% 6%' : '4% 6% 6% 6%' // More bottom margin for sign-up
+            }}
+          >
             {/* Header */}
             <div className="text-center mb-8">
               <div className="flex justify-center mb-4">
@@ -81,7 +85,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               </p>
             </div>
 
-            {/* Form with better spacing */}
+            {/* Form with consistent spacing */}
             <form onSubmit={handleSubmit} className="space-y-6">
               {isSignUp && (
                 <div className="transform rotate-1">
@@ -164,7 +168,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               </button>
             </form>
 
-            {/* Toggle Sign Up/Sign In with better spacing */}
+            {/* Toggle Sign Up/Sign In */}
             <div className="mt-8 text-center">
               <button
                 onClick={() => setIsSignUp(!isSignUp)}
@@ -174,16 +178,46 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               </button>
             </div>
 
-            {/* Decorative elements - repositioned for larger paper */}
-            <div className="absolute top-12 right-12 w-6 h-6 bg-yellow-200 rounded-full opacity-60 transform rotate-45"></div>
-            <div className="absolute bottom-16 left-12 w-4 h-4 bg-blue-200 rounded-full opacity-40 transform -rotate-12"></div>
-            <div className="absolute top-1/3 left-6 w-2 h-8 bg-red-200 opacity-30 transform -rotate-45"></div>
+            {/* Decorative elements - positioned dynamically */}
+            <div 
+              className="absolute w-6 h-6 bg-yellow-200 rounded-full opacity-60 transform rotate-45 transition-all duration-500"
+              style={{
+                top: isSignUp ? '60px' : '48px',
+                right: isSignUp ? '48px' : '48px'
+              }}
+            ></div>
+            <div 
+              className="absolute w-4 h-4 bg-blue-200 rounded-full opacity-40 transform -rotate-12 transition-all duration-500"
+              style={{
+                bottom: isSignUp ? '80px' : '64px',
+                left: isSignUp ? '48px' : '48px'
+              }}
+            ></div>
+            <div 
+              className="absolute w-2 h-8 bg-red-200 opacity-30 transform -rotate-45 transition-all duration-500"
+              style={{
+                top: isSignUp ? '40%' : '33%',
+                left: '24px'
+              }}
+            ></div>
             
-            {/* Small doodles to make it feel more handwritten - repositioned */}
-            <div className="absolute top-1/2 right-8 text-gray-300 text-xs transform rotate-12 font-patrick">
+            {/* Small doodles - positioned dynamically */}
+            <div 
+              className="absolute text-gray-300 text-xs transform rotate-12 font-patrick transition-all duration-500"
+              style={{
+                top: isSignUp ? '50%' : '50%',
+                right: isSignUp ? '32px' : '32px'
+              }}
+            >
               ✓
             </div>
-            <div className="absolute bottom-1/4 right-10 text-gray-300 text-xs transform -rotate-6 font-patrick">
+            <div 
+              className="absolute text-gray-300 text-xs transform -rotate-6 font-patrick transition-all duration-500"
+              style={{
+                bottom: isSignUp ? '30%' : '25%',
+                right: isSignUp ? '40px' : '40px'
+              }}
+            >
               ★
             </div>
           </div>
