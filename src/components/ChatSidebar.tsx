@@ -71,7 +71,7 @@ export function ChatSidebar({
     style={{
       backgroundImage: 'url(/Folder.png)',
       backgroundSize: 'cover',
-      backgroundPosition: 'right center',
+      backgroundPosition: 'left center',
       backgroundRepeat: 'no-repeat',
       minHeight: '100vh',
       filter: 'contrast(1.1) brightness(1.1) saturate(1.2)',
