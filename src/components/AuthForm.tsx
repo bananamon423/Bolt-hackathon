@@ -49,32 +49,25 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
       }}
     >
       <div className="max-w-md w-full">
-        {/* Torn Paper Container */}
+        {/* Torn Paper Container using actual image */}
         <div 
-          className="relative bg-white shadow-2xl"
+          className="relative shadow-2xl"
           style={{
-            clipPath: `polygon(
-              0% 8%, 3% 4%, 8% 6%, 12% 2%, 18% 5%, 22% 1%, 28% 4%, 32% 0%, 38% 3%, 42% 1%, 48% 4%, 52% 0%, 58% 3%, 62% 1%, 68% 4%, 72% 0%, 78% 3%, 82% 1%, 88% 4%, 92% 0%, 98% 3%, 100% 8%,
-              100% 92%, 97% 96%, 92% 94%, 88% 98%, 82% 95%, 78% 99%, 72% 96%, 68% 100%, 62% 97%, 58% 99%, 52% 96%, 48% 100%, 42% 97%, 38% 99%, 32% 96%, 28% 100%, 22% 97%, 18% 99%, 12% 96%, 8% 100%, 3% 97%, 0% 92%
-            )`,
-            filter: 'drop-shadow(0 10px 25px rgba(0,0,0,0.3))',
-            transform: 'rotate(-1deg)'
+            backgroundImage: 'url(/TornPaper.png)',
+            backgroundSize: 'contain',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            filter: 'drop-shadow(0 15px 35px rgba(0,0,0,0.4))',
+            transform: 'rotate(-1deg)',
+            aspectRatio: '3/4',
+            minHeight: '600px'
           }}
         >
-          {/* Paper texture overlay */}
-          <div 
-            className="absolute inset-0 opacity-5"
-            style={{
-              backgroundImage: `
-                radial-gradient(circle at 25% 25%, #000 1px, transparent 1px),
-                radial-gradient(circle at 75% 75%, #000 0.5px, transparent 0.5px),
-                linear-gradient(45deg, transparent 48%, rgba(0,0,0,0.02) 49%, rgba(0,0,0,0.02) 51%, transparent 52%)
-              `,
-              backgroundSize: '20px 20px, 15px 15px, 10px 10px'
-            }}
-          />
-          
-          <div className="relative p-8 pt-12">
+          {/* Content overlay positioned within the paper bounds */}
+          <div className="absolute inset-0 p-8 pt-16 pb-12" style={{
+            // Adjust these values to fit content within the visible paper area
+            margin: '5% 8% 8% 8%'
+          }}>
             {/* Header */}
             <div className="text-center mb-8">
               <div className="flex justify-center mb-4">
@@ -91,7 +84,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {isSignUp && (
                 <div className="transform rotate-1">
                   <label htmlFor="username" className="block text-sm font-bold text-gray-700 mb-2">
@@ -183,24 +176,20 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               </button>
             </div>
 
-            {/* Decorative elements */}
-            <div className="absolute top-4 right-4 w-6 h-6 bg-yellow-200 rounded-full opacity-60 transform rotate-45"></div>
-            <div className="absolute bottom-6 left-4 w-4 h-4 bg-blue-200 rounded-full opacity-40 transform -rotate-12"></div>
-            <div className="absolute top-1/2 left-2 w-2 h-8 bg-red-200 opacity-30 transform -rotate-45"></div>
+            {/* Decorative elements - positioned to look natural on the paper */}
+            <div className="absolute top-8 right-8 w-6 h-6 bg-yellow-200 rounded-full opacity-60 transform rotate-45"></div>
+            <div className="absolute bottom-12 left-8 w-4 h-4 bg-blue-200 rounded-full opacity-40 transform -rotate-12"></div>
+            <div className="absolute top-1/3 left-4 w-2 h-8 bg-red-200 opacity-30 transform -rotate-45"></div>
+            
+            {/* Small doodles to make it feel more handwritten */}
+            <div className="absolute top-1/2 right-4 text-gray-300 text-xs transform rotate-12 font-patrick">
+              ✓
+            </div>
+            <div className="absolute bottom-1/4 right-6 text-gray-300 text-xs transform -rotate-6 font-patrick">
+              ★
+            </div>
           </div>
         </div>
-
-        {/* Paper shadow */}
-        <div 
-          className="absolute inset-0 bg-black opacity-10 -z-10"
-          style={{
-            clipPath: `polygon(
-              0% 8%, 3% 4%, 8% 6%, 12% 2%, 18% 5%, 22% 1%, 28% 4%, 32% 0%, 38% 3%, 42% 1%, 48% 4%, 52% 0%, 58% 3%, 62% 1%, 68% 4%, 72% 0%, 78% 3%, 82% 1%, 88% 4%, 92% 0%, 98% 3%, 100% 8%,
-              100% 92%, 97% 96%, 92% 94%, 88% 98%, 82% 95%, 78% 99%, 72% 96%, 68% 100%, 62% 97%, 58% 99%, 52% 96%, 48% 100%, 42% 97%, 38% 99%, 32% 96%, 28% 100%, 22% 97%, 18% 99%, 12% 96%, 8% 100%, 3% 97%, 0% 92%
-            )`,
-            transform: 'translate(4px, 6px) rotate(-1deg)'
-          }}
-        />
       </div>
     </div>
   );
