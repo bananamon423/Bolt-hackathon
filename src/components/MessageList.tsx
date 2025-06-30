@@ -46,8 +46,7 @@ export function MessageList({
         };
       }
     }
-    
-    // Fallback for legacy messages
+
     return {
       name: 'AI Assistant',
       icon: '🤖',
@@ -63,10 +62,8 @@ export function MessageList({
     }
   };
 
-  // Filter out deleted messages for regular users (show for owners/admins)
   const visibleMessages = messages.filter(message => {
     if (!message.deleted_at) return true;
-    // Show deleted messages to chat owners and the user who deleted them
     return currentUserId === chatOwnerId || message.deleted_by === currentUserId;
   });
 
@@ -108,49 +105,52 @@ export function MessageList({
         return (
           <div
             key={message.id}
-            className={`flex group ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+            className={`flex group w-full ${
+              isAI ? 'justify-center' : isCurrentUser ? 'justify-end' : 'justify-start'
+            }`}
           >
             <div
-              className={`max-w-xs lg:max-w-md xl:max-w-lg flex gap-3 ${
+              className={`flex gap-3 ${
                 isCurrentUser ? 'flex-row-reverse' : 'flex-row'
-              }`}
+              } ${isAI ? 'w-full' : 'max-w-xs lg:max-w-md xl:max-w-lg'}`}
             >
-              {/* Avatar */}
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                isAI 
-                  ? `bg-gradient-to-br ${aiModelInfo?.color || 'from-purple-500 to-pink-500'}` 
-                  : isCurrentUser
-                  ? 'bg-gradient-to-br from-blue-500 to-teal-500'
-                  : 'bg-gradient-to-br from-gray-400 to-gray-600'
-              }`}>
-                {isAI ? (
-                  <span className="text-lg">{aiModelInfo?.icon || '🤖'}</span>
-                ) : (
-                  <User className="w-5 h-5 text-white" />
-                )}
-              </div>
 
               {/* Message Content */}
-              <div className={`flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'} relative`}>
-                {/* Author name for AI messages */}
-                {isAI && aiModelInfo && (
-                  <div className="text-xs font-medium text-gray-600 mb-1 px-1">
-                    {aiModelInfo.name}
+              <div className={`flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'} relative w-full`}>
+                <div className={'flex flex-row gap-2 items-center px-1 mb-2'}>
+                    {/* Avatar */}
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    isAI 
+                      ? `bg-gradient-to-br ${aiModelInfo?.color || 'from-purple-500 to-pink-500'}` 
+                      : isCurrentUser
+                      ? 'bg-gradient-to-br from-blue-500 to-teal-500'
+                      : 'bg-gradient-to-br from-gray-400 to-gray-600'
+                  }`}>
+                    {isAI ? (
+                      <span className="text-m">{aiModelInfo?.icon || '🤖'}</span>
+                    ) : (
+                      <User className="w-5 h-5 text-white" />
+                    )}
                   </div>
-                )}
-
+                  {/* Author name for AI messages */}
+                  {isAI && aiModelInfo && (
+                    <div className="text-xs font-medium text-gray-600 mb-1 px-1">
+                      {aiModelInfo.name}
+                    </div>
+                  )}
+              </div>
                 <div
-                  className={`px-4 py-3 rounded-2xl relative ${
+                  className={`px-4 py-3 rounded-2xl relative w-full ${
                     isDeleted 
                       ? 'opacity-50 border-2 border-dashed border-gray-300'
                       : isAI
-                      ? `bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200`
+                      ? `bg-gradient-to-br from-yellow-200 to-teal-100 border-4 border-teal-500 rounded-bl-none`
                       : isCurrentUser
                       ? 'bg-gradient-to-br from-blue-500 to-teal-500 text-white'
                       : 'bg-gray-100 text-gray-900'
                   }`}
                 >
-                  <div className={`whitespace-pre-wrap text-sm leading-relaxed ${
+                  <div className={`whitespace-pre-wrap text-sm leading-relaxed w-full ${
                     isDeleted ? 'line-through' : ''
                   }`}>
                     {isDeleted ? (
@@ -173,7 +173,7 @@ export function MessageList({
                     />
                   </div>
                 </div>
-                
+
                 {/* Timestamp and metadata */}
                 <div className={`flex items-center gap-2 mt-1 text-xs text-gray-500 ${
                   isCurrentUser ? 'flex-row-reverse' : 'flex-row'
@@ -182,7 +182,7 @@ export function MessageList({
                     <Clock className="w-3 h-3" />
                     <span>{formatTime(message.created_at)}</span>
                   </div>
-                  
+
                   {isAI && !isDeleted && (
                     <>
                       {message.cost_in_credits && (
@@ -191,7 +191,7 @@ export function MessageList({
                           <span>{message.cost_in_credits} credit{message.cost_in_credits > 1 ? 's' : ''}</span>
                         </div>
                       )}
-                      
+
                       {(message.input_tokens || message.output_tokens) && (
                         <div className="flex items-center gap-1">
                           <span>•</span>
@@ -202,7 +202,7 @@ export function MessageList({
                       )}
                     </>
                   )}
-                  
+
                   {!isCurrentUser && !isAI && message.profiles?.username && (
                     <span>• {message.profiles.username}</span>
                   )}
