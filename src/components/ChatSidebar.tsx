@@ -158,10 +158,6 @@ export function ChatSidebar({
                     )}
                   </>
                 )}
-                
-                {collapsed && (
-                  <MessageSquare className="w-5 h-5 mx-auto text-gray-600" />
-                )}
 
                 {showChatMenu === chat.id && (
                   <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-32">
