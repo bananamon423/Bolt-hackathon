@@ -305,7 +305,7 @@ export function MessageInput({
   };
 
   return (
-    <div className="border-t-4 border-dotted border-gray-300 p-4 relative">
+    <div className="border-t-4 border-dotted border-gray-400 p-4 relative">
       {showCreditsWarning && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-red-500" />
