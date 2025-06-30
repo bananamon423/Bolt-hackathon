@@ -51,7 +51,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
       <div className="max-w-md w-full">
         {/* Torn Paper Container using actual image */}
         <div 
-          className="relative shadow-2xl"
+          className="relative"
           style={{
             backgroundImage: 'url(/TornPaper.png)',
             backgroundSize: 'contain',
