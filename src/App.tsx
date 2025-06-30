@@ -47,18 +47,17 @@ function MainApp() {
     initRC();
   }, []);
 
-  // Use models directly from the database
-  const allModels = models;
+  // Filter models to only include Gwiz
+  const allModels = models.filter(model => 
+    model.api_identifier === 'google/gemini-1.5-flash' || 
+    model.model_name.toLowerCase() === 'gwiz'
+  );
 
-  // Set default model (prefer Gwiz by api_identifier)
+  // Set default model (always Gwiz since it's the only one available)
   useEffect(() => {
     if (allModels.length > 0 && !selectedModel) {
-      // Try to find Gwiz by api_identifier first
-      const gwizModel = allModels.find(model => 
-        model.api_identifier === 'google/gemini-1.5-flash' || 
-        model.model_name.toLowerCase() === 'gwiz'
-      );
-      setSelectedModel(gwizModel || allModels[0]);
+      // Since we only have Gwiz, just select the first (and only) model
+      setSelectedModel(allModels[0]);
     }
   }, [allModels, selectedModel]);
 
@@ -266,7 +265,8 @@ function MainApp() {
     user: user ? 'Present' : 'None',
     profile: profile ? 'Present' : 'None',
     revenueCatConfigured,
-    revenueCatInitialized: isRevenueCatInitialized()
+    revenueCatInitialized: isRevenueCatInitialized(),
+    availableModels: allModels.length
   });
 
   if (isLoading) {
