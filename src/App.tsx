@@ -12,7 +12,6 @@ import { ChatHeader } from './components/ChatHeader';
 import { MessageList } from './components/MessageList';
 import { MessageInput } from './components/MessageInput';
 import { SubscriptionManager } from './components/SubscriptionManager';
-import { TokenUsageIndicator } from './components/TokenUsageIndicator';
 import { AdminPage } from './pages/AdminPage';
 import { SharedChatPage } from './pages/SharedChatPage';
 import { Chat, LLMModel, Profile } from './lib/supabase';
@@ -306,22 +305,12 @@ function MainApp() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onlineUsers={onlineUsers}
         deletingChatId={deletingChatId}
+        subscription={subscription}
+        onUpgradeClick={() => setShowSubscriptionManager(true)}
       />
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Token Usage Indicator */}
-        {subscription && !sidebarCollapsed && (
-          <div className="p-4 border-b border-gray-200">
-            <TokenUsageIndicator
-              tokens={subscription.tokens}
-              plan={subscription.plan}
-              maxTokens={subscription.maxTokens}
-              onUpgradeClick={() => setShowSubscriptionManager(true)}
-            />
-          </div>
-        )}
-
         <ChatHeader
           chat={currentChat}
           models={allModels}

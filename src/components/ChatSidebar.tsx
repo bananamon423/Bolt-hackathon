@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import { Plus, MessageSquare, ChevronLeft, ChevronRight, Settings, LogOut, Users, MoreVertical, Trash2, AlertTriangle } from 'lucide-react';
 import { Chat, Profile } from '../lib/supabase';
+import { TokenUsageIndicator } from './TokenUsageIndicator';
+
+interface SubscriptionData {
+  plan: string;
+  tokens: number;
+  maxTokens: number;
+  subscriptionStatus: string;
+  lastTokenReset: string;
+}
 
 interface ChatSidebarProps {
   chats: Chat[];
@@ -15,6 +24,8 @@ interface ChatSidebarProps {
   onToggleCollapse: () => void;
   onlineUsers: string[];
   deletingChatId: string | null;
+  subscription?: SubscriptionData | null;
+  onUpgradeClick?: () => void;
 }
 
 export function ChatSidebar({ 
@@ -29,7 +40,9 @@ export function ChatSidebar({
   collapsed,
   onToggleCollapse,
   onlineUsers,
-  deletingChatId
+  deletingChatId,
+  subscription,
+  onUpgradeClick
 }: ChatSidebarProps) {
   const [hoveredChat, setHoveredChat] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
@@ -179,6 +192,17 @@ export function ChatSidebar({
 
       {/* Bottom Actions */}
       <div className="p-4 border-t border-gray-200 space-y-2">
+        {/* Token Usage Indicator */}
+        {subscription && !collapsed && (
+          <TokenUsageIndicator
+            tokens={subscription.tokens}
+            plan={subscription.plan}
+            maxTokens={subscription.maxTokens}
+            onUpgradeClick={onUpgradeClick}
+            className="mb-2"
+          />
+        )}
+
         {profile?.role === 'admin' && (
           <button
             onClick={() => window.open('/admin', '_blank')}
