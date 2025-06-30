@@ -65,14 +65,15 @@ export function ChatSidebar({
   };
 
   return (
-    <div className={`flex flex-col transition-all duration-300 relative ${
+    <div className={`h-screen flex flex-col transition-all duration-300 relative ${
       collapsed ? 'w-16' : 'w-80'
     }`}
     style={{
       backgroundImage: 'url(/Folder.png)',
       backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat'
+      backgroundPosition: 'left center',
+      backgroundRepeat: 'no-repeat',
+      minHeight: '100vh'
     }}>
       
       {/* Main folder content area */}
