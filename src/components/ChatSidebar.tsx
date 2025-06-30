@@ -128,7 +128,6 @@ export function ChatSidebar({
                       {profile.username?.[0]?.toUpperCase() || 'U'}
                     </div>
                     <span className="text-sm text-gray-600 font-patrick">{profile.username || 'User'}</span>
-                    <span className="text-xs text-gray-500 font-patrick">• {profile.credits_balance} credits</span>
                   </div>
                 )}
               </div>
