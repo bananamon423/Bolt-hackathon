@@ -88,16 +88,9 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
                   <MessageSquare className="w-8 h-8 text-white" />
                 </div>
               </div>
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <h2 className="text-3xl font-bold text-gray-900 transform -rotate-1">
-                  Unified AI Workspace
-                </h2>
-                <img 
-                  src="/black_circle_360x360.png" 
-                  alt="Bolt" 
-                  className="w-8 h-8 opacity-70 transform rotate-2"
-                />
-              </div>
+              <h2 className="text-3xl font-bold text-gray-900 transform -rotate-1 mb-2">
+                Unified AI Workspace
+              </h2>
               <p className="text-gray-600 text-lg">
                 {isSignUp ? 'Create your account' : 'Sign in to your account'}
               </p>
