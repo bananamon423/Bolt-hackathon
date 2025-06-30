@@ -45,8 +45,8 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
         backgroundAttachment: 'fixed'
       }}
     >
-      <div className="max-w-md w-full">
-        {/* Torn Paper Container using actual image */}
+      <div className="max-w-lg w-full">
+        {/* Torn Paper Container using actual image - made bigger */}
         <div 
           className="relative"
           style={{
@@ -56,14 +56,15 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             backgroundRepeat: 'no-repeat',
             filter: 'drop-shadow(0 15px 35px rgba(0,0,0,0.4))',
             transform: 'rotate(-1deg)',
-            aspectRatio: '3/4',
-            minHeight: '600px'
+            aspectRatio: '3/4.2',
+            minHeight: '750px',
+            width: '100%'
           }}
         >
-          {/* Content overlay positioned within the paper bounds */}
-          <div className="absolute inset-0 p-8 pt-16 pb-12" style={{
-            // Adjust these values to fit content within the visible paper area
-            margin: '5% 8% 8% 8%'
+          {/* Content overlay positioned within the paper bounds with more generous padding */}
+          <div className="absolute inset-0 p-12 pt-20 pb-16" style={{
+            // More generous margins to ensure content fits well within the paper
+            margin: '4% 6% 6% 6%'
           }}>
             {/* Header */}
             <div className="text-center mb-8">
@@ -80,8 +81,8 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               </p>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Form with better spacing */}
+            <form onSubmit={handleSubmit} className="space-y-6">
               {isSignUp && (
                 <div className="transform rotate-1">
                   <label htmlFor="username" className="block text-sm font-bold text-gray-700 mb-2">
@@ -163,8 +164,8 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               </button>
             </form>
 
-            {/* Toggle Sign Up/Sign In */}
-            <div className="mt-6 text-center">
+            {/* Toggle Sign Up/Sign In with better spacing */}
+            <div className="mt-8 text-center">
               <button
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="text-blue-600 hover:text-blue-700 font-bold transition-colors text-lg transform rotate-1 hover:rotate-0 inline-block"
@@ -173,16 +174,16 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               </button>
             </div>
 
-            {/* Decorative elements - positioned to look natural on the paper */}
-            <div className="absolute top-8 right-8 w-6 h-6 bg-yellow-200 rounded-full opacity-60 transform rotate-45"></div>
-            <div className="absolute bottom-12 left-8 w-4 h-4 bg-blue-200 rounded-full opacity-40 transform -rotate-12"></div>
-            <div className="absolute top-1/3 left-4 w-2 h-8 bg-red-200 opacity-30 transform -rotate-45"></div>
+            {/* Decorative elements - repositioned for larger paper */}
+            <div className="absolute top-12 right-12 w-6 h-6 bg-yellow-200 rounded-full opacity-60 transform rotate-45"></div>
+            <div className="absolute bottom-16 left-12 w-4 h-4 bg-blue-200 rounded-full opacity-40 transform -rotate-12"></div>
+            <div className="absolute top-1/3 left-6 w-2 h-8 bg-red-200 opacity-30 transform -rotate-45"></div>
             
-            {/* Small doodles to make it feel more handwritten */}
-            <div className="absolute top-1/2 right-4 text-gray-300 text-xs transform rotate-12 font-patrick">
+            {/* Small doodles to make it feel more handwritten - repositioned */}
+            <div className="absolute top-1/2 right-8 text-gray-300 text-xs transform rotate-12 font-patrick">
               ✓
             </div>
-            <div className="absolute bottom-1/4 right-6 text-gray-300 text-xs transform -rotate-6 font-patrick">
+            <div className="absolute bottom-1/4 right-10 text-gray-300 text-xs transform -rotate-6 font-patrick">
               ★
             </div>
           </div>
