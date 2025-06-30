@@ -97,126 +97,8 @@ export function SubscriptionManager({
   };
 
   const handleSubscribe = async (planId: string) => {
-    setSubscribing(planId);
-    setError(null);
-    
-    try {
-      console.log('💳 SubscriptionManager: Starting subscription process for plan:', planId);
-      
-      // Check RevenueCat readiness
-      if (!revenueCatConfigured || !isRevenueCatInitialized()) {
-        throw new Error('Payment system is not ready. Please refresh the page and try again.');
-      }
-
-      // Validate user ID
-      if (!userId || userId === 'undefined' || userId === 'null' || userId.trim() === '') {
-        throw new Error('User authentication required. Please sign in and try again.');
-      }
-
-      console.log('👤 SubscriptionManager: User ID validated:', userId);
-
-      // Find the selected plan
-      const selectedPlan = plans.find(plan => plan.plan_id === planId);
-      if (!selectedPlan) {
-        throw new Error('Selected plan not found');
-      }
-
-      console.log('💳 SubscriptionManager: Selected plan:', selectedPlan);
-
-      // Validate plan has required RevenueCat fields
-      if (!selectedPlan.revenuecat_product_id) {
-        throw new Error('Plan configuration error: missing product ID');
-      }
-
-      console.log('💳 SubscriptionManager: Initiating Web Billing purchase...');
-      console.log('🛒 Product ID:', selectedPlan.revenuecat_product_id);
-
-      try {
-        // For Web Billing, we use purchaseProduct instead of purchasePackage
-        console.log('🛒 SubscriptionManager: Calling Purchases.purchaseProduct...');
-        const purchaseResult = await Purchases.purchaseProduct(selectedPlan.revenuecat_product_id);
-        
-        console.log('✅ SubscriptionManager: Purchase completed:', purchaseResult);
-
-        // Check if the purchase was successful by looking at customer info
-        console.log('👤 SubscriptionManager: Getting updated customer info...');
-        const customerInfo = await Purchases.getCustomerInfo();
-        console.log('👤 SubscriptionManager: Updated customer info:', customerInfo);
-
-        // Check if the entitlement is now active
-        const hasEntitlement = customerInfo.entitlements.active[selectedPlan.revenuecat_entitlement_id];
-        
-        if (hasEntitlement) {
-          console.log('✅ SubscriptionManager: Entitlement is active');
-          
-          // Sync the subscription with Supabase
-          console.log('🔄 SubscriptionManager: Syncing subscription with Supabase...');
-          const { data, error } = await supabase.rpc('update_user_subscription', {
-            p_revenuecat_user_id: userId,
-            p_entitlement_ids: [selectedPlan.revenuecat_entitlement_id],
-            p_subscription_status: 'active',
-            p_original_purchase_date: customerInfo.originalPurchaseDate || null,
-            p_expiration_date: null, // Will be updated by webhook
-            p_is_sandbox: false
-          });
-
-          if (error) {
-            console.error('❌ SubscriptionManager: Failed to sync subscription:', error);
-            throw new Error(`Purchase successful but sync failed: ${error.message}`);
-          }
-
-          console.log('✅ SubscriptionManager: Subscription synced:', data);
-          
-          // Refresh subscription data
-          if (refreshSubscription) {
-            console.log('🔄 SubscriptionManager: Refreshing subscription data...');
-            refreshSubscription();
-          }
-          
-          // Close the modal
-          setTimeout(() => {
-            onClose();
-          }, 1000);
-          
-          // Show success message
-          setError(null);
-          alert('Subscription activated successfully! Your tokens have been updated.');
-          
-        } else {
-          console.warn('⚠️ SubscriptionManager: Purchase completed but entitlement not active');
-          throw new Error('Purchase completed but subscription not activated. Please contact support.');
-        }
-        
-      } catch (purchaseError: any) {
-        console.error('❌ SubscriptionManager: Purchase error:', purchaseError);
-        
-        // Handle different types of purchase errors
-        if (purchaseError.code === 'PURCHASE_CANCELLED') {
-          console.log('ℹ️ SubscriptionManager: Purchase was cancelled by user');
-          setError('Purchase was cancelled');
-        } else if (purchaseError.code === 'PAYMENT_PENDING') {
-          console.log('⏳ SubscriptionManager: Payment is pending');
-          setError('Payment is pending. Please wait for confirmation.');
-        } else if (purchaseError.code === 'PRODUCT_NOT_AVAILABLE') {
-          console.error('❌ SubscriptionManager: Product not available');
-          setError('This subscription plan is not available. Please try another plan or contact support.');
-        } else {
-          console.error('❌ SubscriptionManager: Unknown purchase error:', purchaseError);
-          setError(purchaseError.message || 'Failed to process subscription. Please try again.');
-        }
-        throw purchaseError;
-      }
-      
-    } catch (error: any) {
-      console.error('❌ SubscriptionManager: Subscription error:', error);
-      
-      // Only set error if it wasn't already set by purchase error handling
-      if (!error.message?.includes('cancelled') && !error.message?.includes('pending')) {
-        setError(error.message || 'Failed to process subscription. Please try again.');
-      }
-    } finally {
-      setSubscribing(null);
-    }
+    // Payment functionality is disabled
+    setError('Payment functionality is currently disabled. Please contact support for subscription changes.');
   };
 
   const getPlanFeatures = (plan: SubscriptionPlan) => {
@@ -271,12 +153,6 @@ export function SubscriptionManager({
     return nextReset.toLocaleDateString();
   };
 
-  // Check if user is missing or invalid
-  const hasValidUser = userId && userId !== 'undefined' && userId !== 'null' && userId.trim() !== '';
-  
-  // Check if RevenueCat is ready
-  const isRevenueCatReady = revenueCatConfigured && isRevenueCatInitialized();
-
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -309,43 +185,16 @@ export function SubscriptionManager({
           </div>
         </div>
 
-        {/* User Authentication Warning */}
-        {!hasValidUser && (
-          <div className="p-6 bg-red-50 border-b border-red-200">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-red-500" />
-              <div>
-                <h3 className="font-medium text-red-800">⚠️ Waiting for login</h3>
-                <p className="text-sm text-red-700">Please ensure you are signed in to purchase a subscription.</p>
-                <p className="text-xs text-red-600 mt-1">User ID: {userId || 'Not available'}</p>
-              </div>
+        {/* Payment System Disabled Notice */}
+        <div className="p-6 bg-yellow-50 border-b border-yellow-200">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-6 h-6 text-yellow-500" />
+            <div>
+              <h3 className="font-medium text-yellow-800">Payment System Temporarily Disabled</h3>
+              <p className="text-sm text-yellow-700">Subscription changes are currently unavailable. Please contact support for assistance.</p>
             </div>
           </div>
-        )}
-
-        {/* RevenueCat Configuration Status */}
-        {!isRevenueCatReady && (
-          <div className="p-6 bg-yellow-50 border-b border-yellow-200">
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-              <div className="flex-1">
-                <h3 className="font-medium text-yellow-800">Payment system loading...</h3>
-                <p className="text-sm text-yellow-700">RevenueCat Web Billing is initializing. Please wait a moment.</p>
-                <div className="text-xs text-yellow-600 mt-1 space-y-1">
-                  <p>Configured: {revenueCatConfigured ? '✅' : '❌'}</p>
-                  <p>Initialized: {isRevenueCatInitialized() ? '✅' : '❌'}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="p-2 hover:bg-yellow-100 rounded-lg transition-colors"
-                title="Refresh page"
-              >
-                <RefreshCw className="w-4 h-4 text-yellow-600" />
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* Current Usage */}
         {userSubscription && (
@@ -420,33 +269,15 @@ export function SubscriptionManager({
                   ) : (
                     <button
                       onClick={() => handleSubscribe(plan.plan_id)}
-                      disabled={
-                        subscribing === plan.plan_id || 
-                        !isRevenueCatReady || 
-                        !hasValidUser
-                      }
-                      className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                        plan.plan_id === 'free_plan'
-                          ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      disabled={true} // Always disabled
+                      className="w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-gray-100 text-gray-400 cursor-not-allowed opacity-50"
                     >
-                      {subscribing === plan.plan_id ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      {plan.plan_id === 'free_plan' ? (
+                        'Contact Support'
                       ) : (
                         <>
-                          {plan.plan_id === 'free_plan' ? (
-                            'Downgrade'
-                          ) : !hasValidUser ? (
-                            '⚠️ Waiting for login'
-                          ) : !isRevenueCatReady ? (
-                            'Payment system loading...'
-                          ) : (
-                            <>
-                              <CreditCard className="w-5 h-5" />
-                              Subscribe
-                            </>
-                          )}
+                          <CreditCard className="w-5 h-5" />
+                          Contact Support
                         </>
                       )}
                     </button>
@@ -475,16 +306,9 @@ export function SubscriptionManager({
             <p className="mt-2">
               Need a custom plan? <a href="mailto:support@example.com" className="text-blue-600 hover:underline">Contact us</a>
             </p>
-            {isRevenueCatReady && hasValidUser && (
-              <p className="mt-2 text-xs text-green-600">
-                ✅ Secure payments powered by RevenueCat Web Billing
-              </p>
-            )}
-            {!isRevenueCatReady && (
-              <p className="mt-2 text-xs text-yellow-600">
-                ⏳ Payment system initializing...
-              </p>
-            )}
+            <p className="mt-2 text-xs text-gray-500">
+              💳 Payment system temporarily disabled - Contact support for subscription changes
+            </p>
           </div>
         </div>
       </div>
