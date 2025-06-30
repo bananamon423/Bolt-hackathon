@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Crown, Zap, Check, X, CreditCard, Users, MessageSquare, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Purchases } from '@revenuecat/purchases-js';
 import { supabase } from '../lib/supabase';
-import { isRevenueCatInitialized, getRevenueCatStatus } from '../lib/initializeRevenueCatWebBilling';
+import { isRevenueCatInitialized } from '../lib/initializeRevenueCatWebBilling';
 
 interface SubscriptionPlan {
   id: string;
@@ -103,16 +103,12 @@ export function SubscriptionManager({
     try {
       console.log('💳 SubscriptionManager: Starting subscription process for plan:', planId);
       
-      // Check RevenueCat status
-      const rcStatus = getRevenueCatStatus();
-      console.log('📊 RevenueCat status check:', rcStatus);
-      
-      // Comprehensive RevenueCat readiness check
+      // Check RevenueCat readiness
       if (!revenueCatConfigured || !isRevenueCatInitialized()) {
         throw new Error('Payment system is not ready. Please refresh the page and try again.');
       }
 
-      // Validate user ID thoroughly
+      // Validate user ID
       if (!userId || userId === 'undefined' || userId === 'null' || userId.trim() === '') {
         throw new Error('User authentication required. Please sign in and try again.');
       }
@@ -278,9 +274,8 @@ export function SubscriptionManager({
   // Check if user is missing or invalid
   const hasValidUser = userId && userId !== 'undefined' && userId !== 'null' && userId.trim() !== '';
   
-  // Get detailed RevenueCat status
-  const rcStatus = getRevenueCatStatus();
-  const isRevenueCatReady = revenueCatConfigured && isRevenueCatInitialized() && !rcStatus.isInitializing;
+  // Check if RevenueCat is ready
+  const isRevenueCatReady = revenueCatConfigured && isRevenueCatInitialized();
 
   if (loading) {
     return (
@@ -339,7 +334,6 @@ export function SubscriptionManager({
                 <div className="text-xs text-yellow-600 mt-1 space-y-1">
                   <p>Configured: {revenueCatConfigured ? '✅' : '❌'}</p>
                   <p>Initialized: {isRevenueCatInitialized() ? '✅' : '❌'}</p>
-                  <p>Initializing: {rcStatus.isInitializing ? '⏳' : '✅'}</p>
                 </div>
               </div>
               <button
