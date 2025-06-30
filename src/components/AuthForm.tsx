@@ -68,8 +68,8 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             className="absolute inset-0 transition-all duration-500 ease-in-out"
             style={{
               padding: isSignUp ? '48px 48px 64px 48px' : '48px 48px 64px 48px', // Consistent padding
-              paddingTop: isSignUp ? '80px' : '80px', // Consistent top padding
-              margin: isSignUp ? '4% 6% 8% 6%' : '4% 6% 6% 6%' // More bottom margin for sign-up
+              paddingTop: isSignUp ? '60px' : '80px', // Less top padding for sign-up to move content up
+              margin: isSignUp ? '3% 6% 8% 6%' : '4% 6% 6% 6%' // Less top margin for sign-up
             }}
           >
             {/* Header */}
@@ -190,7 +190,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             <div 
               className="absolute w-2 h-8 bg-red-200 opacity-30 transform -rotate-45 transition-all duration-500"
               style={{
-                top: isSignUp ? '40%' : '33%',
+                top: isSignUp ? '35%' : '33%', // Adjusted for sign-up
                 left: '24px'
               }}
             ></div>
@@ -199,7 +199,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             <div 
               className="absolute text-gray-300 text-xs transform rotate-12 font-patrick transition-all duration-500"
               style={{
-                top: isSignUp ? '50%' : '50%',
+                top: isSignUp ? '45%' : '50%', // Moved up for sign-up
                 right: isSignUp ? '32px' : '32px'
               }}
             >
@@ -208,7 +208,7 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             <div 
               className="absolute text-gray-300 text-xs transform -rotate-6 font-patrick transition-all duration-500"
               style={{
-                bottom: isSignUp ? '30%' : '25%',
+                bottom: isSignUp ? '25%' : '25%',
                 right: isSignUp ? '40px' : '40px'
               }}
             >
