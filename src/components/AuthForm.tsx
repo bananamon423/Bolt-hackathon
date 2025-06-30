@@ -186,12 +186,6 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
               ★
             </div>
           </div>
-
-          {/* Push pins for authentic bulletin board feel */}
-          <div className="absolute -top-2 left-1/4 w-4 h-4 bg-red-500 rounded-full shadow-lg border-2 border-red-600 transform rotate-12"></div>
-          <div className="absolute -top-2 right-1/4 w-4 h-4 bg-blue-500 rounded-full shadow-lg border-2 border-blue-600 transform -rotate-12"></div>
-          <div className="absolute -bottom-2 left-1/3 w-4 h-4 bg-green-500 rounded-full shadow-lg border-2 border-green-600 transform rotate-45"></div>
-          <div className="absolute -bottom-2 right-1/3 w-4 h-4 bg-yellow-500 rounded-full shadow-lg border-2 border-yellow-600 transform -rotate-45"></div>
         </div>
       </div>
     </div>
